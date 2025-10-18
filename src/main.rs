@@ -13,6 +13,8 @@ use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
+mod puzzle_wrap;
+
 mod shapes;
 
 unsafe extern "C" {
@@ -28,6 +30,8 @@ fn main() -> Result<(), Error> {
     unsafe {
         hello();
     }
+
+    // let midend = Midend {};
 
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
