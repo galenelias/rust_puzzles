@@ -37,6 +37,8 @@ fn main() -> Result<(), Error> {
 
     frontend.redraw();
 
+    frontend.set_size();
+
     println!("Made mines??");
 
     let event_loop = EventLoop::new().unwrap();
