@@ -18,27 +18,17 @@ use winit_input_helper::WinitInputHelper;
 mod puzzle_wrap;
 mod shapes;
 
-unsafe extern "C" {
-    fn hello();
-}
-
 const WIDTH: u32 = 400;
 const HEIGHT: u32 = 400;
 
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    unsafe {
-        hello();
-    }
-
     let mut frontend = Frontend::new();
     frontend.new_mines();
     frontend.new_game();
-    frontend.set_size();
+    frontend.set_size(WIDTH, HEIGHT);
     frontend.redraw();
-
-    println!("Made mines??");
 
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
