@@ -1,4 +1,3 @@
-
 use euclid::{Angle, Vector2D};
 use raqote::*;
 
@@ -49,12 +48,12 @@ impl Shapes {
         self.g += delta * 0.71;
         self.b += delta * 1.33;
 
-        // self.dt.clear(SolidSource {
-        //     g: ((self.g.sin() + 1.0) * 127.5).round() as u8,
-        //     r: ((self.r.sin() + 1.0) * 127.5).round() as u8,
-        //     b: ((self.b.sin() + 1.0) * 127.5).round() as u8,
-        //     a: 0xff,
-        // });
+        self.dt.clear(SolidSource {
+            g: ((self.g.sin() + 1.0) * 127.5).round() as u8,
+            r: ((self.r.sin() + 1.0) * 127.5).round() as u8,
+            b: ((self.b.sin() + 1.0) * 127.5).round() as u8,
+            a: 0xff,
+        });
 
         let translate = Vector2D::new(-self.cx, -self.cy).to_transform();
         let inv_translate = translate
