@@ -1,10 +1,20 @@
+use font_kit::canvas::RasterizationOptions;
+use font_kit::family_name::FamilyName;
+use font_kit::hinting::HintingOptions;
+use font_kit::loaders::core_text::Font;
+use font_kit::properties::Properties;
+use font_kit::source::SystemSource;
+use pathfinder_geometry::transform2d::Transform2F;
+use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
+use std::ffi::CStr;
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
-
 // use libc::{c_int, c_void};
 unsafe extern "C" {
     static thegame: GameFFI;
 }
+
+const PIXEL_RATIO: f32 = 2.;
 
 // Forward declarations for opaque types
 #[repr(C)]
@@ -191,6 +201,9 @@ unsafe extern "C" {
     // sfree
     fn sfree(ptr: *mut c_void);
 
+    // int midend_process_key(midend *me, int x, int y, int button);
+    fn midend_process_key(me: *mut MidendFFI, x: c_int, y: c_int, button: c_int) -> c_int;
+
 }
 
 #[unsafe(no_mangle)]
@@ -241,14 +254,17 @@ pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
 struct Drawing {
     dt: DrawTarget,
     colours: Vec<PuzColor>,
+    colours_source: Vec<SolidSource>,
 }
 
 impl Drawing {
     fn new(width: u32, height: u32) -> Self {
-        Drawing {
+        let drawing = Drawing {
             dt: DrawTarget::new(width as i32, height as i32),
             colours: Vec::new(),
-        }
+            colours_source: Vec::new(),
+        };
+        return drawing;
     }
 
     /// Gain access to the underlying pixels
@@ -258,40 +274,28 @@ impl Drawing {
 
     fn start_draw(self: &mut Drawing) {
         // println!("start_draw called");
-
-        self.dt.clear(SolidSource {
-            g: self.colours[0].g,
-            r: self.colours[0].r,
-            b: self.colours[0].b,
-            a: 0xff,
-        });
+        // self.dt.clear(self.colours_source[0]);
     }
 
     fn end_draw(self: &mut Drawing) {
         println!("end_draw called");
     }
 
-    fn draw_rect(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
-        println!(
-            "Drawing rectangle at ({}, {}) with width {} and height {} and colour {}",
-            x, y, w, h, colour
-        );
+    fn clear(self: &mut Drawing) {
+        self.dt.clear(self.colours_source[0]);
+    }
 
-        if w > 200 {
-            return;
-        }
+    fn draw_rect(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
+        // if w > 200 {
+        //     return;
+        // }
 
         self.dt.fill_rect(
             x as f32,
             y as f32,
             w as f32,
             h as f32,
-            &Source::Solid(SolidSource {
-                g: self.colours[(colour) as usize].g,
-                r: self.colours[(colour) as usize].r,
-                b: self.colours[(colour) as usize].b,
-                a: 0xff,
-            }),
+            &Source::Solid(self.colours_source[colour as usize]),
             &DrawOptions::new(),
         );
     }
@@ -328,23 +332,13 @@ impl Drawing {
 
         self.dt.fill(
             &path,
-            &Source::Solid(SolidSource {
-                g: self.colours[(outlinecolour) as usize].g,
-                r: self.colours[(outlinecolour) as usize].r,
-                b: self.colours[(outlinecolour) as usize].b,
-                a: 0xff,
-            }),
+            &Source::Solid(self.colours_source[fillcolour as usize]),
             &DrawOptions::new(),
         );
 
         // self.dt.stroke(
         //     &path,
-        //     &Source::Solid(SolidSource {
-        //         g: self.colours[(outlinecolour + 1) as usize].g,
-        //         r: self.colours[(outlinecolour + 1) as usize].r,
-        //         b: self.colours[(outlinecolour + 1) as usize].b,
-        //         a: 0xff,
-        //     }),
+        //     &Source::Solid(self.colours_source[colour as usize]),
         //     &StrokeStyle {
         //         cap: LineCap::Round,
         //         join: LineJoin::Round,
@@ -355,10 +349,95 @@ impl Drawing {
         //     },
         //     &DrawOptions::new(),
         // );
+    }
+
+    fn draw_line(self: &mut Drawing, x1: c_int, y1: c_int, x2: c_int, y2: c_int, colour: c_int) {
+        let mut pb = PathBuilder::new();
+
+        pb.move_to(x1 as f32, y1 as f32);
+        pb.line_to(x2 as f32, y2 as f32);
+        let path = pb.finish();
+
+        self.dt.stroke(
+            &path,
+            &Source::Solid(self.colours_source[colour as usize]),
+            &StrokeStyle::default(),
+            &DrawOptions::new(),
+        );
+    }
+
+    fn measure_text(self: &mut Drawing, font: &Font, point_size: f32, text: &str) -> Vector2F {
+        let mut offset = Vector2F::new(0., 0.);
+        let mut height = None;
+        for c in text.chars() {
+            let id = font.glyph_for_char(c).unwrap();
+            offset += font.advance(id).unwrap() * point_size / 24. / 96.;
+
+            if height.is_none() {
+                let bounds = font.raster_bounds(
+                    id,
+                    point_size,
+                    Transform2F::default(),
+                    HintingOptions::None,
+                    RasterizationOptions::GrayscaleAa,
+                );
+
+                height = Some(bounds.unwrap().height());
+            }
+        }
+        Vector2F::new(offset.x(), height.unwrap_or(0) as f32)
+    }
+
+    fn draw_text(
+        self: &mut Drawing,
+        x: c_int,
+        y: c_int,
+        _fonttype: c_int,
+        fontsize: c_int,
+        align: c_int,
+        colour: c_int,
+        text: *const c_char,
+    ) {
+        let text = unsafe { CStr::from_ptr(text).to_string_lossy().into_owned() };
+        println!("Draw text. align = {}: {}", align, text);
+
+        // TODO: Cache somewhere
+        let font = SystemSource::new()
+            .select_best_match(&[FamilyName::SansSerif], &Properties::new())
+            .unwrap()
+            .load()
+            .unwrap();
+
+        let render_size = self.measure_text(&font, fontsize as f32, &text);
+
+        let align_x_offset = if (align & ALIGN_HCENTRE) != 0 {
+            -(render_size.x() / 2.)
+        } else if (align & ALIGN_HRIGHT) != 0 {
+            -(render_size.x())
+        } else {
+            0.
+        };
+
+        let align_y_offset = if (align & ALIGN_VCENTRE) != 0 {
+            render_size.y() / 2.
+        } else {
+            0.
+        };
 
         println!(
-            "Drawing polygon with {} points and fill colour {} and outline colour {}",
-            num_points, fillcolour, outlinecolour
+            "Draw_text offset: ({}, {})",
+            render_size.x(),
+            render_size.y()
+        );
+        // println!("Draw_text offset: ({}, {})", align_x_offset, align_y_offset);
+
+        self.dt.draw_text(
+            &font,
+            fontsize as f32,
+            &text,
+            Point::new(x as f32 + align_x_offset, y as f32 + align_y_offset),
+            &Source::Solid(self.colours_source[colour as usize]),
+            &DrawOptions::new(),
         );
     }
 }
@@ -399,6 +478,36 @@ unsafe extern "C" fn draw_polygon_wrap(
         (*(*target).handle).draw_polygon(coords, npoints, fillcolour, outlinecolour);
     }
 }
+//
+// void (*draw_line)(drawing *dr, int x1, int y1, int x2, int y2, int colour);
+unsafe extern "C" fn draw_line_wrap(
+    target: *mut DrawingFFI,
+    x1: c_int,
+    y1: c_int,
+    x2: c_int,
+    y2: c_int,
+    colour: c_int,
+) {
+    unsafe {
+        (*(*target).handle).draw_line(x1, y1, x2, y2, colour);
+    }
+}
+
+// void draw_text(drawing *dr, int x, int y, int fonttype, int fontsize, int align, int colour, const char *text);
+unsafe extern "C" fn draw_text_wrap(
+    target: *mut DrawingFFI,
+    x: c_int,
+    y: c_int,
+    fonttype: c_int,
+    fontsize: c_int,
+    align: c_int,
+    colour: c_int,
+    text: *const c_char,
+) {
+    unsafe {
+        (*(*target).handle).draw_text(x, y, fonttype, fontsize, align, colour, text);
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PuzColor {
@@ -406,6 +515,28 @@ pub struct PuzColor {
     g: u8,
     b: u8,
 }
+
+pub enum MouseButton {
+    Left,
+    Right,
+}
+
+pub enum Input {
+    MouseDown((MouseButton, (f32, f32))),
+    MouseUp((MouseButton, (f32, f32))),
+}
+
+const LEFT_BUTTON: c_int = 0x200;
+const RIGHT_BUTTON: c_int = 0x202;
+const LEFT_RELEASE: c_int = 0x206;
+const RIGHT_RELEASE: c_int = 0x207;
+
+const ALIGN_VNORMAL: c_int = 0x000;
+const ALIGN_VCENTRE: c_int = 0x100;
+
+const ALIGN_HLEFT: c_int = 0x000;
+const ALIGN_HCENTRE: c_int = 0x001;
+const ALIGN_HRIGHT: c_int = 0x002;
 
 #[repr(C)]
 pub struct Frontend {
@@ -421,9 +552,9 @@ impl Frontend {
             midend: std::ptr::null_mut(),
             drawing_ffi: DrawingApiFFI {
                 version: 1,
-                draw_text: None,
+                draw_text: Some(draw_text_wrap),
                 draw_rect: Some(draw_rect_wrap),
-                draw_line: None,
+                draw_line: Some(draw_line_wrap),
                 draw_polygon: Some(draw_polygon_wrap),
                 draw_circle: None,
                 draw_update: None,
@@ -458,12 +589,6 @@ impl Frontend {
         self.drawing.frame()
     }
 
-    // fn new_game(&mut self, game: *const GameFFI) {
-    //     unsafe {
-    //         let midend = midend_new(self, game, &self.drawing_ffi, &mut self.drawing);
-    //     }
-    // }
-
     pub fn new_mines(&mut self) {
         unsafe {
             let midend = midend_new(self, &thegame, &self.drawing_ffi, &mut self.drawing);
@@ -484,10 +609,12 @@ impl Frontend {
                 self.midend,
                 &mut x_val,
                 &mut y_val,
-                false, /*user_size*/
-                2.0,   /*device_pixel_ratio*/
+                false,              /*user_size*/
+                PIXEL_RATIO as f64, /*device_pixel_ratio*/
             );
         }
+
+        self.drawing.clear();
 
         println!("Post set_size: x = {}, y = {}", x_val, y_val);
     }
@@ -516,6 +643,17 @@ impl Frontend {
             }
         }
 
+        self.drawing.colours_source = self
+            .colours
+            .iter()
+            .map(|color| SolidSource {
+                g: color.g,
+                r: color.r,
+                b: color.b,
+                a: 0xff,
+            })
+            .collect();
+
         self.drawing.colours = self.colours.clone();
 
         unsafe {
@@ -533,6 +671,27 @@ impl Frontend {
     pub fn redraw(&mut self) {
         unsafe {
             midend_redraw(self.midend);
+        }
+    }
+
+    pub fn process_input(&mut self, input: &Input) {
+        let button = match input {
+            Input::MouseDown((MouseButton::Left, _)) => LEFT_BUTTON,
+            Input::MouseDown((MouseButton::Right, _)) => RIGHT_BUTTON,
+            Input::MouseUp((MouseButton::Left, _)) => LEFT_RELEASE,
+            Input::MouseUp((MouseButton::Right, _)) => RIGHT_RELEASE,
+        };
+
+        let (x, y) = match input {
+            Input::MouseDown((_, (x, y))) | Input::MouseUp((_, (x, y))) => {
+                ((*x / PIXEL_RATIO) as c_int, (*y / PIXEL_RATIO) as c_int)
+            }
+            _ => (0, 0),
+        };
+
+        println!("midend_process_key: x={}, y={}", x, y);
+        unsafe {
+            midend_process_key(self.midend, x, y, button);
         }
     }
 }

@@ -2,7 +2,7 @@
 #![deny(clippy::all)]
 // #![forbid(unsafe_code)]
 
-use crate::puzzle_wrap::Frontend;
+use crate::puzzle_wrap::{Frontend, Input, MouseButton};
 use crate::shapes::Shapes;
 use error_iter::ErrorIter as _;
 use log::error;
@@ -98,7 +98,13 @@ fn main() -> Result<(), Error> {
 
             if input.mouse_pressed(0) {
                 if let Some((x, y)) = input.cursor() {
-                    println!("Pressed at {x}, {y}")
+                    frontend.process_input(&Input::MouseDown((MouseButton::Left, (x, y))));
+                }
+            }
+
+            if input.mouse_released(0) {
+                if let Some((x, y)) = input.cursor() {
+                    frontend.process_input(&Input::MouseUp((MouseButton::Left, (x, y))));
                 }
             }
 
