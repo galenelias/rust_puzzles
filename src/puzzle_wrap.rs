@@ -18,17 +18,7 @@ const PIXEL_RATIO: f32 = 2.;
 
 // Forward declarations for opaque types
 #[repr(C)]
-pub struct drawing {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-pub struct blitter {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-pub struct midend {
+pub struct BlitterFFI {
     _private: [u8; 0],
 }
 
@@ -96,12 +86,12 @@ pub struct DrawingApiFFI {
     pub end_draw: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
     pub status_bar: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, text: *const c_char)>,
     pub blitter_new:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut blitter>,
-    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut BlitterFFI>,
+    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI)>,
     pub blitter_save:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
     pub blitter_load:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
     pub begin_doc: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, pages: c_int)>,
     pub begin_page: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, number: c_int)>,
     pub begin_puzzle: Option<
@@ -207,7 +197,7 @@ unsafe extern "C" {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn frontend_default_colour(fe: *mut Frontend, output: *mut c_float) {
+pub extern "C" fn frontend_default_colour(_fe: *mut Frontend, output: *mut c_float) {
     unsafe {
         let out_slice = std::slice::from_raw_parts_mut(output, 3);
         out_slice[0] = 0.8;
@@ -235,13 +225,13 @@ pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsiz
 // void deactivate_timer(frontend *fe);
 // void activate_timer(frontend *fe);
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
+pub unsafe extern "C" fn deactivate_timer(_fe: *mut Frontend) {
     println!("Deactivate timer called");
     // Implementation for deactivating the timer
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
+pub unsafe extern "C" fn activate_timer(_fe: *mut Frontend) {
     println!("Activate timer called");
     // Implementation for activating the timer
 }
@@ -336,7 +326,7 @@ impl Drawing {
     }
 
     fn end_draw(self: &mut Drawing) {
-        println!("end_draw called");
+        // println!("end_draw called");
     }
 
     fn clear(self: &mut Drawing) {
@@ -363,7 +353,7 @@ impl Drawing {
         points: *const c_int,
         num_points: c_int,
         fillcolour: c_int,
-        outlinecolour: c_int,
+        _outlinecolour: c_int,
     ) {
         let mut pb = PathBuilder::new();
 
@@ -375,11 +365,6 @@ impl Drawing {
 
         let start = get_point(0);
         pb.move_to(start.0, start.1);
-
-        // for i in 0..num_points {
-        //     let pt = get_point(i);
-        //     println!("Polygon pt {}: {},{}", i, pt.0, pt.1);
-        // }
 
         for i in 0..num_points {
             let pt = get_point(i);
@@ -474,7 +459,6 @@ impl Drawing {
         text: *const c_char,
     ) {
         let text = unsafe { CStr::from_ptr(text).to_string_lossy().into_owned() };
-        println!("Draw text. align = {}: {}", align, text);
 
         // TODO: Cache somewhere
         let font = SystemSource::new()
@@ -498,13 +482,6 @@ impl Drawing {
         } else {
             0.
         };
-
-        println!(
-            "Draw_text offset: ({}, {})",
-            render_size.x(),
-            render_size.y()
-        );
-        // println!("Draw_text offset: ({}, {})", align_x_offset, align_y_offset);
 
         self.dt.draw_text(
             &font,
@@ -621,10 +598,10 @@ const RIGHT_BUTTON: c_int = 0x202;
 const LEFT_RELEASE: c_int = 0x206;
 const RIGHT_RELEASE: c_int = 0x207;
 
-const ALIGN_VNORMAL: c_int = 0x000;
+// const ALIGN_VNORMAL: c_int = 0x000;
 const ALIGN_VCENTRE: c_int = 0x100;
 
-const ALIGN_HLEFT: c_int = 0x000;
+// const ALIGN_HLEFT: c_int = 0x000;
 const ALIGN_HCENTRE: c_int = 0x001;
 const ALIGN_HRIGHT: c_int = 0x002;
 
@@ -683,9 +660,6 @@ impl Frontend {
         unsafe {
             let midend = midend_new(self, &thegame, &self.drawing_ffi, &mut self.drawing);
 
-            // print 'midend' as a pointer value
-            println!("midend: {:p}", midend);
-
             self.midend = midend;
             self.sync_colors();
         }
@@ -705,8 +679,6 @@ impl Frontend {
         }
 
         self.drawing.clear();
-
-        println!("Post set_size: x = {}, y = {}", x_val, y_val);
     }
 
     fn sync_colors(&mut self) {
@@ -715,12 +687,6 @@ impl Frontend {
 
         unsafe {
             colours = midend_colours(self.midend, &mut num_colours);
-        }
-
-        unsafe {
-            for i in 0..num_colours * 3 {
-                println!("colours[{}] = {}", i, (*colours.offset(i as isize)))
-            }
         }
 
         self.colours = Vec::with_capacity(num_colours as usize);
@@ -749,7 +715,6 @@ impl Frontend {
         unsafe {
             sfree(colours as *mut c_void);
         }
-        println!("Synced {} colors", self.colours.len());
     }
 
     pub fn new_game(&mut self) {
@@ -776,7 +741,6 @@ impl Frontend {
             Input::MouseDown((_, (x, y))) | Input::MouseUp((_, (x, y))) => {
                 ((*x / PIXEL_RATIO) as c_int, (*y / PIXEL_RATIO) as c_int)
             }
-            _ => (0, 0),
         };
 
         println!("midend_process_key: x={}, y={}", x, y);
