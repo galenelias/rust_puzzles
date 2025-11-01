@@ -303,6 +303,7 @@ struct Drawing {
     dt: DrawTarget,
     colours: Vec<PuzColor>,
     colours_source: Vec<SolidSource>,
+    end_draw_callback: Option<Box<dyn Fn() + 'static>>,
 }
 
 impl Drawing {
@@ -311,6 +312,7 @@ impl Drawing {
             dt: DrawTarget::new(width as i32, height as i32),
             colours: Vec::new(),
             colours_source: Vec::new(),
+            end_draw_callback: None,
         };
         return drawing;
     }
@@ -320,13 +322,24 @@ impl Drawing {
         self.dt.get_data()
     }
 
+    /// Set a callback to be invoked when end_draw is called.
+    ///
+    /// This is an internal method used by the Frontend struct.
+    fn set_end_draw_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.end_draw_callback = Some(Box::new(callback));
+    }
+
     fn start_draw(self: &mut Drawing) {
-        // println!("start_draw called");
-        // self.dt.clear(self.colours_source[0]);
+        // Nothing to do?
     }
 
     fn end_draw(self: &mut Drawing) {
-        // println!("end_draw called");
+        if let Some(ref callback) = self.end_draw_callback {
+            callback();
+        }
     }
 
     fn clear(self: &mut Drawing) {
@@ -334,10 +347,6 @@ impl Drawing {
     }
 
     fn draw_rect(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
-        // if w > 200 {
-        //     return;
-        // }
-
         self.dt.fill_rect(
             x as f32,
             y as f32,
@@ -647,13 +656,20 @@ impl Frontend {
             },
             drawing: Drawing::new(width, height),
             colours: Vec::new(),
-            // drawing_api: DrawingApi::new(),
         }
     }
 
     /// Gain access to the underlying pixels
     pub fn frame(&self) -> &[u32] {
         self.drawing.frame()
+    }
+
+    /// Set a callback to be invoked when end_draw is called.
+    pub fn set_end_draw_callback<F>(&mut self, callback: F)
+    where
+        F: Fn() + 'static,
+    {
+        self.drawing.set_end_draw_callback(callback);
     }
 
     pub fn new_mines(&mut self) {
@@ -743,7 +759,6 @@ impl Frontend {
             }
         };
 
-        println!("midend_process_key: x={}, y={}", x, y);
         unsafe {
             midend_process_key(self.midend, x, y, button);
         }

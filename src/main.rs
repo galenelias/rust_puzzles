@@ -6,10 +6,9 @@ use crate::puzzle_wrap::{Frontend, Input, MouseButton};
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
-use std::time::Instant;
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoop;
+use winit::event_loop::EventLoopBuilder;
 use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
@@ -19,16 +18,18 @@ mod puzzle_wrap;
 const WIDTH: u32 = 400;
 const HEIGHT: u32 = 400;
 
+#[derive(Debug)]
+enum PuzzleEvents {
+    RedrawRequested,
+}
+
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut frontend = Frontend::new(WIDTH, HEIGHT);
-    frontend.new_mines();
-    frontend.new_game();
-    frontend.set_size(WIDTH, HEIGHT);
-    frontend.redraw();
-
-    let event_loop = EventLoop::new().unwrap();
+    // let event_loop = EventLoop::new().unwrap();
+    let event_loop = EventLoopBuilder::<PuzzleEvents>::with_user_event()
+        .build()
+        .unwrap();
     let mut input = WinitInputHelper::new();
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
@@ -47,33 +48,20 @@ fn main() -> Result<(), Error> {
         Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
-    let mut now = Instant::now();
+    let mut frontend = Frontend::new(WIDTH, HEIGHT);
+    frontend.new_mines();
+    frontend.new_game();
+    frontend.set_size(WIDTH, HEIGHT);
+    frontend.redraw();
+
+    let event_loop_proxy = event_loop.create_proxy();
+    frontend.set_end_draw_callback(move || {
+        event_loop_proxy
+            .send_event(PuzzleEvents::RedrawRequested)
+            .unwrap();
+    });
 
     let res = event_loop.run(|event, elwt| {
-        // Draw the current frame
-        if let Event::WindowEvent {
-            event: WindowEvent::RedrawRequested,
-            ..
-        } = event
-        {
-            for (dst, &src) in pixels
-                .frame_mut()
-                .chunks_exact_mut(4)
-                .zip(frontend.frame().iter())
-            {
-                dst[0] = (src >> 16) as u8;
-                dst[1] = (src >> 8) as u8;
-                dst[2] = src as u8;
-                dst[3] = (src >> 24) as u8;
-            }
-
-            if let Err(err) = pixels.render() {
-                log_error("pixels.render", err);
-                elwt.exit();
-                return;
-            }
-        }
-
         // Handle input events
         if input.update(&event) {
             // Close events
@@ -114,12 +102,42 @@ fn main() -> Result<(), Error> {
                     frontend.process_input(&Input::MouseUp((MouseButton::Right, (x, y))));
                 }
             }
+        }
 
-            // Update internal state and request a redraw
-            // shapes.draw(now.elapsed().as_secs_f32());
-            window.request_redraw();
+        match event {
+            Event::WindowEvent { window_id, event } => {
+                match event {
+                    WindowEvent::RedrawRequested => {
+                        for (dst, &src) in pixels
+                            .frame_mut()
+                            .chunks_exact_mut(4)
+                            .zip(frontend.frame().iter())
+                        {
+                            dst[0] = (src >> 16) as u8;
+                            dst[1] = (src >> 8) as u8;
+                            dst[2] = src as u8;
+                            dst[3] = (src >> 24) as u8;
+                        }
 
-            now = Instant::now();
+                        if let Err(err) = pixels.render() {
+                            log_error("pixels.render", err);
+                            elwt.exit();
+                            return;
+                        }
+                    }
+                    _ => {
+                        // println!("Other WindowEvent event: {:?}", event)
+                    }
+                };
+            }
+            Event::UserEvent(ref event) => match event {
+                PuzzleEvents::RedrawRequested => {
+                    window.request_redraw();
+                }
+            },
+            _ => {
+                // println!("Other event: {:?}", event)
+            }
         }
     });
     res.map_err(|e| Error::UserDefined(Box::new(e)))
