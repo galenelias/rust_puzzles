@@ -457,6 +457,17 @@ impl Drawing {
         Vector2F::new(offset.x(), height.unwrap_or(0) as f32)
     }
 
+    fn clip(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int) {
+        self.dt.push_clip_rect(IntRect::new(
+            IntPoint::new(x, y),
+            IntPoint::new(x + w, y + h),
+        ));
+    }
+
+    fn unclip(self: &mut Drawing) {
+        self.dt.pop_clip();
+    }
+
     fn draw_text(
         self: &mut Drawing,
         x: c_int,
@@ -585,6 +596,18 @@ unsafe extern "C" fn draw_text_wrap(
     }
 }
 
+unsafe extern "C" fn clip_wrap(target: *mut DrawingFFI, x: c_int, y: c_int, w: c_int, h: c_int) {
+    unsafe {
+        (*(*target).handle).clip(x, y, w, h);
+    }
+}
+
+unsafe extern "C" fn unclip_wrap(target: *mut DrawingFFI) {
+    unsafe {
+        (*(*target).handle).unclip();
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PuzColor {
     r: u8,
@@ -634,8 +657,8 @@ impl Frontend {
                 draw_polygon: Some(draw_polygon_wrap),
                 draw_circle: Some(draw_circle_wrap),
                 draw_update: None,
-                clip: None,
-                unclip: None,
+                clip: Some(clip_wrap),
+                unclip: Some(unclip_wrap),
                 start_draw: Some(start_draw_wrap),
                 end_draw: Some(end_draw_wrap),
                 status_bar: None,
