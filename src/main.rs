@@ -24,7 +24,7 @@ const HEIGHT: u32 = 400;
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut frontend = Frontend::new();
+    let mut frontend = Frontend::new(WIDTH, HEIGHT);
     frontend.new_mines();
     frontend.new_game();
     frontend.set_size(WIDTH, HEIGHT);
@@ -35,7 +35,7 @@ fn main() -> Result<(), Error> {
     let window = {
         let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
         WindowBuilder::new()
-            .with_title("Hello Raqote")
+            .with_title("Rusty Mines")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
@@ -64,7 +64,7 @@ fn main() -> Result<(), Error> {
             for (dst, &src) in pixels
                 .frame_mut()
                 .chunks_exact_mut(4)
-                .zip(shapes.frame().iter())
+                .zip(frontend.frame().iter())
             {
                 dst[0] = (src >> 16) as u8;
                 dst[1] = (src >> 8) as u8;
@@ -93,6 +93,12 @@ fn main() -> Result<(), Error> {
                     log_error("pixels.resize_surface", err);
                     elwt.exit();
                     return;
+                }
+            }
+
+            if input.mouse_pressed(0) {
+                if let Some((x, y)) = input.cursor() {
+                    println!("Pressed at {x}, {y}")
                 }
             }
 
