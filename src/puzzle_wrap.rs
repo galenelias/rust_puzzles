@@ -611,13 +611,16 @@ pub enum MouseButton {
 
 pub enum Input {
     MouseDown((MouseButton, (f32, f32))),
+    MouseHeld((MouseButton, (f32, f32))),
     MouseUp((MouseButton, (f32, f32))),
 }
 
 const LEFT_BUTTON: c_int = 0x200;
 const RIGHT_BUTTON: c_int = 0x202;
+const LEFT_DRAG: c_int = 0x203;
+const RIGHT_DRAG: c_int = 0x205;
 const LEFT_RELEASE: c_int = 0x206;
-const RIGHT_RELEASE: c_int = 0x207;
+const RIGHT_RELEASE: c_int = 0x208;
 
 // const ALIGN_VNORMAL: c_int = 0x000;
 const ALIGN_VCENTRE: c_int = 0x100;
@@ -779,14 +782,16 @@ impl Frontend {
         let button = match input {
             Input::MouseDown((MouseButton::Left, _)) => LEFT_BUTTON,
             Input::MouseDown((MouseButton::Right, _)) => RIGHT_BUTTON,
+            Input::MouseHeld((MouseButton::Left, _)) => LEFT_DRAG,
+            Input::MouseHeld((MouseButton::Right, _)) => RIGHT_DRAG,
             Input::MouseUp((MouseButton::Left, _)) => LEFT_RELEASE,
             Input::MouseUp((MouseButton::Right, _)) => RIGHT_RELEASE,
         };
 
         let (x, y) = match input {
-            Input::MouseDown((_, (x, y))) | Input::MouseUp((_, (x, y))) => {
-                (*x as c_int, *y as c_int)
-            }
+            Input::MouseDown((_, (x, y)))
+            | Input::MouseHeld((_, (x, y)))
+            | Input::MouseUp((_, (x, y))) => (*x as c_int, *y as c_int),
         };
 
         // TODO: Handle retina resolution. Mac mouse events don't map to logical coordinates.
