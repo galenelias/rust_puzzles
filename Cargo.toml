@@ -5,7 +5,6 @@ edition = "2024"
 authors = ["Galen Elias <gelias@gmail.com>"]
 
 [dependencies]
-euclid = "0.22"
 raqote = "0.8"
 env_logger = "0.10"
 error-iter = "0.4"

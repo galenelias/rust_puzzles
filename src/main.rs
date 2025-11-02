@@ -3,7 +3,6 @@
 // #![forbid(unsafe_code)]
 
 use crate::puzzle_wrap::{Frontend, Input, MouseButton};
-use crate::shapes::Shapes;
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
@@ -16,7 +15,6 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 mod puzzle_wrap;
-mod shapes;
 
 const WIDTH: u32 = 400;
 const HEIGHT: u32 = 400;
@@ -42,14 +40,11 @@ fn main() -> Result<(), Error> {
             .unwrap()
     };
 
-    let (mut pixels, mut shapes) = {
+    let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
 
-        let pixels = Pixels::new(WIDTH, HEIGHT, surface_texture)?;
-        let shapes = Shapes::new(WIDTH, HEIGHT);
-
-        (pixels, shapes)
+        Pixels::new(WIDTH, HEIGHT, surface_texture)?
     };
 
     let mut now = Instant::now();
@@ -121,7 +116,7 @@ fn main() -> Result<(), Error> {
             }
 
             // Update internal state and request a redraw
-            shapes.draw(now.elapsed().as_secs_f32());
+            // shapes.draw(now.elapsed().as_secs_f32());
             window.request_redraw();
 
             now = Instant::now();
