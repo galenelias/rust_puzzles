@@ -23,10 +23,10 @@ unsafe extern "C" {
 
 const PIXEL_RATIO: f32 = 2.;
 
-// Forward declarations for opaque types
-#[repr(C)]
-pub struct BlitterFFI {
-    _private: [u8; 0],
+pub struct Blitter {
+    dt: DrawTarget,
+    width: i32,
+    height: i32,
 }
 
 #[repr(C)]
@@ -93,12 +93,12 @@ pub struct DrawingApiFFI {
     pub end_draw: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
     pub status_bar: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, text: *const c_char)>,
     pub blitter_new:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut BlitterFFI>,
-    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut Blitter>,
+    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter)>,
     pub blitter_save:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter, x: c_int, y: c_int)>,
     pub blitter_load:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter, x: c_int, y: c_int)>,
     pub begin_doc: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, pages: c_int)>,
     pub begin_page: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, number: c_int)>,
     pub begin_puzzle: Option<
@@ -205,7 +205,6 @@ pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsiz
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
-    println!("Deactivate timer called");
     // Implementation for deactivating the timer
     unsafe {
         (*fe).is_timer_active = false;
@@ -225,10 +224,6 @@ pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
 pub unsafe extern "C" fn document_add_puzzle() {
     println!("document_add_puzzle called");
 }
-
-// struct RustPuzzleInteroperability {
-//     drawing_api: Drawing,
-// }
 
 /// Create a raqote::Path for a circle
 ///
@@ -501,6 +496,78 @@ impl Drawing {
             &DrawOptions::new(),
         );
     }
+
+    fn blitter_new(self: &mut Drawing, w: i32, h: i32) -> Box<Blitter> {
+        Box::new(Blitter {
+            dt: DrawTarget::new(w, h),
+            width: w,
+            height: h,
+        })
+    }
+
+    fn blitter_save(self: &mut Drawing, blitter: &mut Blitter, x: i32, y: i32) {
+        let src_data = self.dt.get_data();
+        let dst_data = blitter.dt.get_data_u8_mut();
+        let src_width = self.dt.width();
+        let src_height = self.dt.height();
+
+        // Copy pixels from the main DrawTarget to the blitter's DrawTarget
+        for row in 0..blitter.height {
+            let src_y = y + row;
+            if src_y < 0 || src_y >= src_height {
+                continue;
+            }
+
+            for col in 0..blitter.width {
+                let src_x = x + col;
+                if src_x < 0 || src_x >= src_width {
+                    continue;
+                }
+
+                let src_idx = (src_y * src_width + src_x) as usize;
+                let dst_idx = (row * blitter.width + col) as usize * 4;
+
+                let pixel = src_data[src_idx];
+                dst_data[dst_idx] = (pixel & 0xFF) as u8; // B
+                dst_data[dst_idx + 1] = ((pixel >> 8) & 0xFF) as u8; // G
+                dst_data[dst_idx + 2] = ((pixel >> 16) & 0xFF) as u8; // R
+                dst_data[dst_idx + 3] = ((pixel >> 24) & 0xFF) as u8; // A
+            }
+        }
+    }
+
+    fn blitter_load(self: &mut Drawing, blitter: &mut Blitter, x: i32, y: i32) {
+        let src_data = blitter.dt.get_data();
+        let dst_width = self.dt.width();
+        let dst_height = self.dt.height();
+
+        // Get mutable reference to destination data separately
+        let dst_data = self.dt.get_data_u8_mut();
+
+        // Copy pixels from the blitter's DrawTarget back to the main DrawTarget
+        for row in 0..blitter.height {
+            let dst_y = y + row;
+            if dst_y < 0 || dst_y >= dst_height {
+                continue;
+            }
+
+            for col in 0..blitter.width {
+                let dst_x = x + col;
+                if dst_x < 0 || dst_x >= dst_width {
+                    continue;
+                }
+
+                let src_idx = (row * blitter.width + col) as usize;
+                let dst_idx = (dst_y * dst_width + dst_x) as usize * 4;
+
+                let pixel = src_data[src_idx];
+                dst_data[dst_idx] = (pixel & 0xFF) as u8; // B
+                dst_data[dst_idx + 1] = ((pixel >> 8) & 0xFF) as u8; // G
+                dst_data[dst_idx + 2] = ((pixel >> 16) & 0xFF) as u8; // R
+                dst_data[dst_idx + 3] = ((pixel >> 24) & 0xFF) as u8; // A
+            }
+        }
+    }
 }
 
 unsafe extern "C" fn draw_rect_wrap(
@@ -597,6 +664,41 @@ unsafe extern "C" fn unclip_wrap(target: *mut DrawingFFI) {
     }
 }
 
+unsafe extern "C" fn blitter_new_wrap(target: *mut DrawingFFI, w: c_int, h: c_int) -> *mut Blitter {
+    let blitter = unsafe { (*(*target).handle).blitter_new(w, h) };
+    Box::into_raw(blitter) as *mut Blitter
+}
+
+unsafe extern "C" fn blitter_free_wrap(_target: *mut DrawingFFI, blitter: *mut Blitter) {
+    if !blitter.is_null() {
+        unsafe {
+            let _ = Box::from_raw(blitter);
+        }
+    }
+}
+
+unsafe extern "C" fn blitter_save_wrap(
+    target: *mut DrawingFFI,
+    blitter: *mut Blitter,
+    x: c_int,
+    y: c_int,
+) {
+    unsafe {
+        (*(*target).handle).blitter_save(&mut *blitter, x, y);
+    }
+}
+
+unsafe extern "C" fn blitter_load_wrap(
+    target: *mut DrawingFFI,
+    blitter: *mut Blitter,
+    x: c_int,
+    y: c_int,
+) {
+    unsafe {
+        (*(*target).handle).blitter_load(&mut *blitter, x, y);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PuzColor {
     r: u8,
@@ -655,10 +757,10 @@ impl Frontend {
                 start_draw: Some(start_draw_wrap),
                 end_draw: Some(end_draw_wrap),
                 status_bar: None,
-                blitter_new: None,
-                blitter_free: None,
-                blitter_save: None,
-                blitter_load: None,
+                blitter_new: Some(blitter_new_wrap),
+                blitter_free: Some(blitter_free_wrap),
+                blitter_save: Some(blitter_save_wrap),
+                blitter_load: Some(blitter_load_wrap),
                 begin_doc: None,
                 begin_page: None,
                 begin_puzzle: None,
