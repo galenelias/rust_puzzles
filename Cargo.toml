@@ -1,0 +1,18 @@
+[package]
+name = "rust_puzzles"
+version = "0.1.0"
+edition = "2024"
+authors = ["Galen Elias <gelias@gmail.com>"]
+
+[dependencies]
+euclid = "0.22"
+raqote = { version = "0.8", default-features = false }
+env_logger = "0.10"
+error-iter = "0.4"
+log = "0.4"
+winit = "0.29"
+winit_input_helper = "0.15"
+pixels = "0.15.0"
+
+[build-dependencies]
+cc = "1.2.40"
