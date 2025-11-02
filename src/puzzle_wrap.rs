@@ -1,10 +1,10 @@
 use font_kit::canvas::RasterizationOptions;
 use font_kit::family_name::FamilyName;
 use font_kit::hinting::HintingOptions;
-#[cfg(target_os = "windows")]
-use font_kit::loaders::directwrite::Font;
 #[cfg(target_os = "macos")]
 use font_kit::loaders::core_text::Font;
+#[cfg(target_os = "windows")]
+use font_kit::loaders::directwrite::Font;
 
 use font_kit::properties::Properties;
 use font_kit::source::SystemSource;
@@ -13,6 +13,7 @@ use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
+use std::time::Instant;
 
 unsafe extern "C" {
     static thegame: GameFFI;
@@ -177,6 +178,9 @@ unsafe extern "C" {
     fn midend_redraw(me: *mut MidendFFI);
     // void fatal(const char *fmt, ...);
 
+    // void midend_timer(midend *me, float tplus);
+    fn midend_timer(me: *mut MidendFFI, tplus: c_float);
+
     // void midend_size(midend *me, int *x, int *y, bool user_size, double device_pixel_ratio);
     fn midend_size(
         me: *mut MidendFFI,
@@ -226,18 +230,22 @@ pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsiz
     }
 }
 
-// void deactivate_timer(frontend *fe);
-// void activate_timer(frontend *fe);
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn deactivate_timer(_fe: *mut Frontend) {
+pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
     println!("Deactivate timer called");
     // Implementation for deactivating the timer
+    unsafe {
+        (*fe).is_timer_active = false;
+    }
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn activate_timer(_fe: *mut Frontend) {
-    println!("Activate timer called");
-    // Implementation for activating the timer
+pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
+    // println!("Activate timer called");
+    unsafe {
+        (*fe).timer_start = Instant::now();
+        (*fe).is_timer_active = true;
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -652,6 +660,8 @@ pub struct Frontend {
     drawing_ffi: DrawingApiFFI,
     drawing: Drawing,
     colours: Vec<PuzColor>,
+    is_timer_active: bool,
+    timer_start: Instant,
 }
 
 impl Frontend {
@@ -688,6 +698,8 @@ impl Frontend {
             },
             drawing: Drawing::new(width, height),
             colours: Vec::new(),
+            is_timer_active: false,
+            timer_start: Instant::now(),
         }
     }
 
@@ -777,6 +789,21 @@ impl Frontend {
         }
     }
 
+    pub fn tick(&mut self) {
+        // We can't call this with tiny elapsed times, otherwise the midend code doesn't
+        // accumulate the time correctly, and the timer will not work properly.
+        if self.is_timer_active && self.timer_start.elapsed().as_millis() > 10 {
+            // println!(
+            //     "Pulsing timer: {}",
+            //     self.timer_start.elapsed().as_secs_f32()
+            // );
+            unsafe {
+                midend_timer(self.midend, self.timer_start.elapsed().as_secs_f32());
+            }
+            self.timer_start = Instant::now();
+        }
+    }
+
     pub fn process_input(&mut self, input: &Input) {
         let button = match input {
             Input::MouseDown((MouseButton::Left, _)) => LEFT_BUTTON,
@@ -790,6 +817,10 @@ impl Frontend {
                 (*x as c_int, *y as c_int)
             }
         };
+
+        // TODO: Handle retina resolution. Mac mouse events don't map to logical coordinates.
+        #[cfg(target_os = "macos")]
+        let (x, y) = ((x / 2), (y / 2));
 
         unsafe {
             midend_process_key(self.midend, x, y, button);

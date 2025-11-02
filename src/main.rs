@@ -62,6 +62,9 @@ fn main() -> Result<(), Error> {
     });
 
     let res = event_loop.run(|event, elwt| {
+        // TODO: Ensure we get events on some cadence.  This can currently be starved
+        frontend.tick(); // Give a chance for timers to run.
+
         // Handle input events
         if input.update(&event) {
             // Close events
@@ -105,7 +108,10 @@ fn main() -> Result<(), Error> {
         }
 
         match event {
-            Event::WindowEvent { window_id, event } => {
+            Event::WindowEvent {
+                window_id: _,
+                event,
+            } => {
                 match event {
                     WindowEvent::RedrawRequested => {
                         for (dst, &src) in pixels
