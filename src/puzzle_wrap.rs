@@ -1,3 +1,5 @@
+#![allow(improper_ctypes)]
+
 use font_kit::canvas::RasterizationOptions;
 use font_kit::family_name::FamilyName;
 use font_kit::hinting::HintingOptions;
@@ -136,9 +138,8 @@ pub struct DrawingApiFFI {
     >,
 }
 
-#[repr(C)]
 pub struct DrawingFFI {
-    drawing_api: *const DrawingApiFFI,
+    _drawing_api: *const DrawingApiFFI,
     handle: *mut Drawing,
 }
 
@@ -154,34 +155,15 @@ pub struct MidendFFI {
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 
-// #[repr(C)]
-// pub struct DrawingFFI {
-//     _data: (),
-//     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
-// }
-
 unsafe extern "C" {
-    // midend *midend_new(frontend *fe, const game *ourgame, const DrawingApi *drapi, void *drhandle);
-    // struct frontend;
-    // struct mident;
-    // struct DrawingApi;
-    // struct game;
-
     fn midend_new(
         fe: *mut Frontend,
         game: *const GameFFI,
         drapi: *const DrawingApiFFI,
         drhandle: *mut Drawing,
     ) -> *mut MidendFFI;
-
-    // void midend_redraw(midend *me);
     fn midend_redraw(me: *mut MidendFFI);
-    // void fatal(const char *fmt, ...);
-
-    // void midend_timer(midend *me, float tplus);
     fn midend_timer(me: *mut MidendFFI, tplus: c_float);
-
-    // void midend_size(midend *me, int *x, int *y, bool user_size, double device_pixel_ratio);
     fn midend_size(
         me: *mut MidendFFI,
         x: *mut c_int,
@@ -189,19 +171,10 @@ unsafe extern "C" {
         user_size: bool,
         device_pixel_ratio: c_double,
     );
-
-    // void midend_new_game(midend *me);
     fn midend_new_game(me: *mut MidendFFI);
-
-    // float *midend_colours(midend *me, int *ncolours);
     fn midend_colours(me: *mut MidendFFI, ncolours: *mut c_int) -> *mut c_float;
-
-    // sfree
     fn sfree(ptr: *mut c_void);
-
-    // int midend_process_key(midend *me, int x, int y, int button);
     fn midend_process_key(me: *mut MidendFFI, x: c_int, y: c_int, button: c_int) -> c_int;
-
 }
 
 #[unsafe(no_mangle)]
@@ -315,7 +288,6 @@ pub fn build_circle(radius: f32, x: f32, y: f32) -> raqote::Path {
     pb.finish()
 }
 
-#[repr(C)] // Needed?
 struct Drawing {
     dt: DrawTarget,
     colours: Vec<PuzColor>,
@@ -654,7 +626,6 @@ const ALIGN_VCENTRE: c_int = 0x100;
 const ALIGN_HCENTRE: c_int = 0x001;
 const ALIGN_HRIGHT: c_int = 0x002;
 
-#[repr(C)]
 pub struct Frontend {
     midend: *mut MidendFFI,
     drawing_ffi: DrawingApiFFI,
