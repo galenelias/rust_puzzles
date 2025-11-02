@@ -1,9 +1,9 @@
-#[repr(C)]
-pub struct Frontend {}
-
 use std::os::raw::{c_char, c_float, c_int, c_void};
 
 // use libc::{c_int, c_void};
+unsafe extern "C" {
+    static thegame: GameFFI;
+}
 
 // Forward declarations for opaque types
 #[repr(C)]
@@ -13,6 +13,11 @@ pub struct drawing {
 
 #[repr(C)]
 pub struct blitter {
+    _private: [u8; 0],
+}
+
+#[repr(C)]
+pub struct midend {
     _private: [u8; 0],
 }
 
@@ -34,7 +39,7 @@ pub struct DrawingApiFFI {
     >,
     pub draw_rect: Option<
         unsafe extern "C" fn(
-            dr: *mut DrawingApi,
+            dr: *mut DrawingFFI,
             x: c_int,
             y: c_int,
             w: c_int,
@@ -126,6 +131,12 @@ pub struct DrawingApiFFI {
 }
 
 #[repr(C)]
+pub struct DrawingFFI {
+    drawing_api: *const DrawingApiFFI,
+    handle: *mut Drawing,
+}
+
+#[repr(C)]
 pub struct GameFFI {
     _data: (),
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
@@ -152,24 +163,110 @@ unsafe extern "C" {
 
     fn midend_new(
         fe: *mut Frontend,
-        ourgame: *const GameFFI,
-        drapi: *const DrawingApi,
-        drhandle: *mut c_void,
+        game: *const GameFFI,
+        drapi: *const DrawingApiFFI,
+        drhandle: *mut Drawing,
     ) -> *mut MidendFFI;
 
+    // void midend_redraw(midend *me);
+    fn midend_redraw(me: *mut MidendFFI);
+    // void fatal(const char *fmt, ...);
+
+    //  void frontend_default_colour(frontend *fe, float *output);
+
 }
 
-struct RustPuzzleInteroperability {
-    drawing_api: DrawingApi,
+#[unsafe(no_mangle)]
+pub extern "C" fn frontend_default_colour(fe: *mut Frontend, output: *mut c_float) {
+    unsafe {
+        let out_slice = std::slice::from_raw_parts_mut(output, 3);
+        out_slice[0] = 0.1;
+        out_slice[1] = 0.1;
+        out_slice[2] = 0.1;
+    }
 }
 
-struct DrawingApi {
-    drawing_ffi: DrawingApiFFI,
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn fatal(_fmt: *const c_char, ...) {
+    println!("Fatal error!");
 }
 
-impl DrawingApi {
+// void get_random_seed(void **randseed, int *randseedsize)
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsize: *mut c_int) {
+    unsafe {
+        let seed_value: i32 = 42;
+        let seed_ptr = Box::into_raw(Box::new(seed_value)) as *mut c_void;
+        *randseed = seed_ptr;
+        *randseedsize = std::mem::size_of::<i32>() as c_int;
+    }
+}
+
+// void deactivate_timer(frontend *fe);
+// void activate_timer(frontend *fe);
+pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
+    println!("Deactivate timer called");
+    // Implementation for deactivating the timer
+}
+
+pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
+    println!("Activate timer called");
+    // Implementation for activating the timer
+}
+
+// struct RustPuzzleInteroperability {
+//     drawing_api: Drawing,
+// }
+
+#[repr(C)] // Needed?
+struct Drawing {}
+
+impl Drawing {
     fn new() -> Self {
-        DrawingApi {
+        Drawing {}
+    }
+
+    fn draw_rectangle(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
+        println!(
+            "Drawing rectangle at ({}, {}) with width {} and height {} and colour {}",
+            x, y, w, h, colour
+        );
+    }
+}
+
+unsafe extern "C" fn draw_rectangle_wrap(
+    target: *mut DrawingFFI,
+    x: c_int,
+    y: c_int,
+    w: c_int,
+    h: c_int,
+    colour: c_int,
+) {
+    unsafe {
+        (*(*target).handle).draw_rectangle(x, y, w, h, colour);
+    }
+}
+
+// impl RustPuzzleInteroperability {
+//     fn new() -> Self {
+//         Self {
+//             drawing_api: DrawingApi::new(),
+//         }
+//     }
+// }
+
+#[repr(C)]
+pub struct Frontend {
+    midend: *mut MidendFFI,
+    drawing_ffi: DrawingApiFFI,
+    drawing: Drawing,
+    // drawing_api: DrawingApi,
+}
+
+impl Frontend {
+    pub fn new() -> Self {
+        Self {
+            midend: std::ptr::null_mut(),
             drawing_ffi: DrawingApiFFI {
                 version: 1,
                 draw_text: None,
@@ -198,55 +295,31 @@ impl DrawingApi {
                 text_fallback: None,
                 draw_thick_line: None,
             },
+            drawing: Drawing::new(),
+            // drawing_api: DrawingApi::new(),
         }
     }
 
-    fn draw_rectangle(
-        self: &mut DrawingApi,
-        x: c_int,
-        y: c_int,
-        w: c_int,
-        h: c_int,
-        colour: c_int,
-    ) {
-        println!(
-            "Drawing rectangle at ({}, {}) with width {} and height {} and colour {}",
-            x, y, w, h, colour
-        );
+    fn new_game(&mut self, game: *const GameFFI) {
+        unsafe {
+            let midend = midend_new(self, game, &self.drawing_ffi, &mut self.drawing);
+        }
     }
-}
 
-unsafe extern "C" fn draw_rectangle_wrap(
-    target: *mut DrawingApi,
-    x: c_int,
-    y: c_int,
-    w: c_int,
-    h: c_int,
-    colour: c_int,
-) {
-    (*target).draw_rectangle(x, y, w, h, colour);
-}
+    pub fn new_mines(&mut self) {
+        unsafe {
+            let midend = midend_new(self, &thegame, &self.drawing_ffi, &mut self.drawing);
 
-impl RustPuzzleInteroperability {
-    fn new() -> Self {
-        Self {
-            drawing_api: DrawingApi::new(),
+            // print 'midend' as a pointer value
+            println!("midend: {:p}", midend);
+
+            self.midend = midend;
+        }
+    }
+
+    pub fn redraw(&mut self) {
+        unsafe {
+            midend_redraw(self.midend);
         }
     }
 }
-
-// pub struct Midend {}
-
-// impl Midend {
-//     fn new(
-//         fe: *mut frontend,
-//         ourgame: *const game,
-//         drapi: *const drawing_api,
-//         drhandle: *mut c_void,
-//     ) -> Self {
-//         unsafe {
-//             let midend = midend_new(fe, ourgame, drapi, drhandle);
-//             Self {}
-//         }
-//     }
-// }

@@ -1,6 +1,8 @@
+#![feature(c_variadic)]
 #![deny(clippy::all)]
 // #![forbid(unsafe_code)]
 
+use crate::puzzle_wrap::Frontend;
 use crate::shapes::Shapes;
 use error_iter::ErrorIter as _;
 use log::error;
@@ -14,7 +16,6 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 mod puzzle_wrap;
-
 mod shapes;
 
 unsafe extern "C" {
@@ -31,7 +32,12 @@ fn main() -> Result<(), Error> {
         hello();
     }
 
-    // let midend = Midend {};
+    let mut frontend = Frontend::new();
+    frontend.new_mines();
+
+    frontend.redraw();
+
+    println!("Made mines??");
 
     let event_loop = EventLoop::new().unwrap();
     let mut input = WinitInputHelper::new();
