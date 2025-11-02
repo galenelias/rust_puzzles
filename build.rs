@@ -7,19 +7,30 @@
 // version.c
 
 fn main() {
-    cc::Build::new()
+    let mut build = cc::Build::new();
+
+    build
         .file("puzzles/mines.c")
-        // common_libs
+        // .file("puzzles/bridges.c")
+        // // common_libs
         .file("puzzles/drawing.c")
+        .file("puzzles/dsf.c")
+        .file("puzzles/findloop.c")
         .file("puzzles/malloc.c")
+        .file("puzzles/midend.c")
         .file("puzzles/midend.c")
         .file("puzzles/misc.c")
         .file("puzzles/random.c")
         .file("puzzles/tree234.c")
-        .include("puzzles_inc")
-        // .define("COMBINED", None)
-        .flag("-Wno-sign-compare")
-        .flag("-Wno-unused-parameter")
-        .compile("mines");
+        .include("puzzles_inc");
+
+    if !cfg!(target_env = "msvc") {
+        build.flag("-Wno-sign-compare");
+        build.flag("-Wno-unused-parameter");
+    }
+
+    build.compile("mines");
+
+    // .define("COMBINED", None)
     // println!("cargo::rerun-if-changed=src/hello.c");
 }

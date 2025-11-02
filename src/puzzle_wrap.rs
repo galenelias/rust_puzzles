@@ -1,7 +1,11 @@
 use font_kit::canvas::RasterizationOptions;
 use font_kit::family_name::FamilyName;
 use font_kit::hinting::HintingOptions;
+#[cfg(target_os = "windows")]
+use font_kit::loaders::directwrite::Font;
+#[cfg(target_os = "macos")]
 use font_kit::loaders::core_text::Font;
+
 use font_kit::properties::Properties;
 use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
@@ -234,6 +238,11 @@ pub unsafe extern "C" fn deactivate_timer(_fe: *mut Frontend) {
 pub unsafe extern "C" fn activate_timer(_fe: *mut Frontend) {
     println!("Activate timer called");
     // Implementation for activating the timer
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn document_add_puzzle() {
+    println!("document_add_puzzle called");
 }
 
 // struct RustPuzzleInteroperability {
@@ -778,7 +787,7 @@ impl Frontend {
 
         let (x, y) = match input {
             Input::MouseDown((_, (x, y))) | Input::MouseUp((_, (x, y))) => {
-                ((*x / PIXEL_RATIO) as c_int, (*y / PIXEL_RATIO) as c_int)
+                (*x as c_int, *y as c_int)
             }
         };
 
