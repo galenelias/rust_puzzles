@@ -184,6 +184,12 @@ unsafe extern "C" {
     // void midend_new_game(midend *me);
     fn midend_new_game(me: *mut MidendFFI);
 
+    // float *midend_colours(midend *me, int *ncolours);
+    fn midend_colours(me: *mut MidendFFI, ncolours: *mut c_int) -> *mut c_float;
+
+    // sfree
+    fn sfree(ptr: *mut c_void);
+
 }
 
 #[unsafe(no_mangle)]
@@ -312,12 +318,19 @@ unsafe extern "C" fn draw_polygon_wrap(
 //     }
 // }
 
+#[derive(Debug)]
+pub struct PuzColor {
+    r: f32,
+    g: f32,
+    b: f32,
+}
+
 #[repr(C)]
 pub struct Frontend {
     midend: *mut MidendFFI,
     drawing_ffi: DrawingApiFFI,
     drawing: Drawing,
-    // drawing_api: DrawingApi,
+    colours: Vec<PuzColor>,
 }
 
 impl Frontend {
@@ -353,6 +366,7 @@ impl Frontend {
                 draw_thick_line: None,
             },
             drawing: Drawing::new(),
+            colours: Vec::new(),
             // drawing_api: DrawingApi::new(),
         }
     }
@@ -371,23 +385,45 @@ impl Frontend {
             println!("midend: {:p}", midend);
 
             self.midend = midend;
+            self.sync_colors();
         }
     }
 
-    pub fn set_size(&mut self) {
-        let mut x_val: c_int = 500;
-        let mut y_val: c_int = 500;
+    pub fn set_size(&mut self, width: u32, height: u32) {
+        let mut x_val = width as c_int;
+        let mut y_val = height as c_int;
         unsafe {
             midend_size(
                 self.midend,
                 &mut x_val,
                 &mut y_val,
                 false, /*user_size*/
-                1.0,   /*device_pixel_ratio*/
+                2.0,   /*device_pixel_ratio*/
             );
         }
 
         println!("Post set_size: x = {}, y = {}", x_val, y_val);
+    }
+
+    fn sync_colors(&mut self) {
+        let mut num_colours: c_int = 0;
+        let colours: *mut c_float;
+
+        unsafe {
+            colours = midend_colours(self.midend, &mut num_colours);
+        }
+
+        self.colours = Vec::with_capacity((num_colours / 3) as usize);
+        unsafe {
+            for i in 0..num_colours as isize {
+                let r = *colours.offset(i * 3);
+                let g = *colours.offset(i * 3 + 1);
+                let b = *colours.offset(i * 3 + 2);
+                self.colours.push(PuzColor { r, g, b });
+            }
+        }
+
+        println!("Synced {} colors", self.colours.len());
     }
 
     pub fn new_game(&mut self) {

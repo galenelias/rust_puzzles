@@ -21,6 +21,5 @@ fn main() {
         .flag("-Wno-sign-compare")
         .flag("-Wno-unused-parameter")
         .compile("mines");
-    cc::Build::new().file("src/hello.c").compile("hello");
-    println!("cargo::rerun-if-changed=src/hello.c");
+    // println!("cargo::rerun-if-changed=src/hello.c");
 }
