@@ -5,7 +5,8 @@ edition = "2024"
 authors = ["Galen Elias <gelias@gmail.com>"]
 
 [dependencies]
-raqote = "0.8"
+# raqote = "0.8"
+raqote = { git = "https://github.com/galenelias/raqote.git", branch = "user/gelias/allFixes" }
 env_logger = "0.10"
 error-iter = "0.4"
 log = "0.4"

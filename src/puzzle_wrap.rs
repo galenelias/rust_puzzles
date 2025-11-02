@@ -23,10 +23,10 @@ unsafe extern "C" {
 
 const PIXEL_RATIO: f32 = 2.;
 
-// Forward declarations for opaque types
-#[repr(C)]
-pub struct BlitterFFI {
-    _private: [u8; 0],
+pub struct Blitter {
+    dt: DrawTarget,
+    width: i32,
+    height: i32,
 }
 
 #[repr(C)]
@@ -93,12 +93,12 @@ pub struct DrawingApiFFI {
     pub end_draw: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
     pub status_bar: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, text: *const c_char)>,
     pub blitter_new:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut BlitterFFI>,
-    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut Blitter>,
+    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter)>,
     pub blitter_save:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter, x: c_int, y: c_int)>,
     pub blitter_load:
-        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut BlitterFFI, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut Blitter, x: c_int, y: c_int)>,
     pub begin_doc: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, pages: c_int)>,
     pub begin_page: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, number: c_int)>,
     pub begin_puzzle: Option<
@@ -205,7 +205,6 @@ pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsiz
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
-    println!("Deactivate timer called");
     // Implementation for deactivating the timer
     unsafe {
         (*fe).is_timer_active = false;
@@ -225,10 +224,6 @@ pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
 pub unsafe extern "C" fn document_add_puzzle() {
     println!("document_add_puzzle called");
 }
-
-// struct RustPuzzleInteroperability {
-//     drawing_api: Drawing,
-// }
 
 /// Create a raqote::Path for a circle
 ///
@@ -501,6 +496,33 @@ impl Drawing {
             &DrawOptions::new(),
         );
     }
+
+    fn blitter_new(self: &mut Drawing, w: i32, h: i32) -> Box<Blitter> {
+        Box::new(Blitter {
+            dt: DrawTarget::new(w, h),
+            width: w,
+            height: h,
+        })
+    }
+
+    fn blitter_save(self: &mut Drawing, blitter: &mut Blitter, x: i32, y: i32) {
+        blitter.dt.copy_surface(
+            &self.dt,
+            IntRect::new(
+                IntPoint::new(x, y),
+                IntPoint::new(x + blitter.width, y + blitter.height),
+            ),
+            IntPoint::new(0, 0),
+        );
+    }
+
+    fn blitter_load(self: &mut Drawing, blitter: &mut Blitter, x: i32, y: i32) {
+        self.dt.copy_surface(
+            &blitter.dt,
+            IntRect::new(IntPoint::new(0, 0), IntPoint::new(blitter.width, blitter.height)),
+            IntPoint::new(x, y),
+        );
+    }
 }
 
 unsafe extern "C" fn draw_rect_wrap(
@@ -597,6 +619,41 @@ unsafe extern "C" fn unclip_wrap(target: *mut DrawingFFI) {
     }
 }
 
+unsafe extern "C" fn blitter_new_wrap(target: *mut DrawingFFI, w: c_int, h: c_int) -> *mut Blitter {
+    let blitter = unsafe { (*(*target).handle).blitter_new(w, h) };
+    Box::into_raw(blitter) as *mut Blitter
+}
+
+unsafe extern "C" fn blitter_free_wrap(_target: *mut DrawingFFI, blitter: *mut Blitter) {
+    if !blitter.is_null() {
+        unsafe {
+            let _ = Box::from_raw(blitter);
+        }
+    }
+}
+
+unsafe extern "C" fn blitter_save_wrap(
+    target: *mut DrawingFFI,
+    blitter: *mut Blitter,
+    x: c_int,
+    y: c_int,
+) {
+    unsafe {
+        (*(*target).handle).blitter_save(&mut *blitter, x, y);
+    }
+}
+
+unsafe extern "C" fn blitter_load_wrap(
+    target: *mut DrawingFFI,
+    blitter: *mut Blitter,
+    x: c_int,
+    y: c_int,
+) {
+    unsafe {
+        (*(*target).handle).blitter_load(&mut *blitter, x, y);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PuzColor {
     r: u8,
@@ -655,10 +712,10 @@ impl Frontend {
                 start_draw: Some(start_draw_wrap),
                 end_draw: Some(end_draw_wrap),
                 status_bar: None,
-                blitter_new: None,
-                blitter_free: None,
-                blitter_save: None,
-                blitter_load: None,
+                blitter_new: Some(blitter_new_wrap),
+                blitter_free: Some(blitter_free_wrap),
+                blitter_save: Some(blitter_save_wrap),
+                blitter_load: Some(blitter_load_wrap),
                 begin_doc: None,
                 begin_page: None,
                 begin_puzzle: None,

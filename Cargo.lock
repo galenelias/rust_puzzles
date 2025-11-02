@@ -1317,8 +1317,7 @@ checksum = "c3d6831663a5098ea164f89cff59c6284e95f4e3c76ce9848d4529f5ccca9bde"
 [[package]]
 name = "raqote"
 version = "0.8.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "324990858d2a5df9ccd30b2e8b474030bd503297378a3fc0944c37af00eb8903"
+source = "git+https://github.com/galenelias/raqote.git?branch=user%2Fgelias%2FallFixes#1e03c401b91d799a730f88bd32c748ee1aebb62f"
 dependencies = [
  "euclid",
  "font-kit",
