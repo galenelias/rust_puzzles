@@ -9,7 +9,7 @@ use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
-// use libc::{c_int, c_void};
+
 unsafe extern "C" {
     static thegame: GameFFI;
 }
@@ -250,6 +250,64 @@ pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
 //     drawing_api: Drawing,
 // }
 
+/// Create a raqote::Path for a circle
+///
+/// # Arguments
+///
+/// * `radius` - The radius of the circle
+/// * `x` - The x coordinate of the center of the circle
+/// * `y` - The y coordinate of the center of the circle
+///
+/// # Example
+///
+/// ```
+/// use raqote_utils::build_circle;
+///
+/// let circle = build_circle(100.0, 100.0, 100.0);
+/// ```
+/// Source: https://github.com/sk337/raqote-utils/blob/main/src/lib.rs
+pub fn build_circle(radius: f32, x: f32, y: f32) -> raqote::Path {
+    let mut pb = PathBuilder::new();
+
+    let x = x - radius;
+    let y = y + radius;
+
+    let offset = 0.5522847498 * radius;
+
+    pb.move_to(x + radius, y);
+
+    pb.cubic_to(
+        x + radius + offset,
+        y,
+        x + (radius * 2.),
+        y - radius + offset,
+        x + (radius * 2.),
+        y - radius,
+    );
+
+    pb.cubic_to(
+        x + (radius * 2.),
+        y - radius - offset,
+        x + radius + offset,
+        y - (radius * 2.),
+        x + radius,
+        y - (radius * 2.),
+    );
+
+    pb.cubic_to(
+        x + radius - offset,
+        y - (radius * 2.),
+        x,
+        y - radius - offset,
+        x,
+        y - radius,
+    );
+
+    pb.cubic_to(x, y - offset, x + radius - offset, y, x + radius, y);
+
+    pb.finish()
+}
+
 #[repr(C)] // Needed?
 struct Drawing {
     dt: DrawTarget,
@@ -366,6 +424,23 @@ impl Drawing {
         );
     }
 
+    fn draw_circle(
+        self: &mut Drawing,
+        x: c_int,
+        y: c_int,
+        radius: c_int,
+        fillcolour: c_int,
+        _outlinecolour: c_int, // TODO
+    ) {
+        let path = build_circle(radius as f32, x as f32, y as f32);
+
+        self.dt.fill(
+            &path,
+            &Source::Solid(self.colours_source[fillcolour as usize]),
+            &DrawOptions::new(),
+        );
+    }
+
     fn measure_text(self: &mut Drawing, font: &Font, point_size: f32, text: &str) -> Vector2F {
         let mut offset = Vector2F::new(0., 0.);
         let mut height = None;
@@ -452,6 +527,21 @@ unsafe extern "C" fn draw_rect_wrap(
 ) {
     unsafe {
         (*(*target).handle).draw_rect(x, y, w, h, colour);
+    }
+}
+
+// void draw_circle(drawing *dr, int cx, int cy, int radius,
+//                  int fillcolour, int outlinecolour);
+unsafe extern "C" fn draw_circle_wrap(
+    target: *mut DrawingFFI,
+    cx: c_int,
+    cy: c_int,
+    radius: c_int,
+    fillcolour: c_int,
+    outlinecolour: c_int,
+) {
+    unsafe {
+        (*(*target).handle).draw_circle(cx, cy, radius, fillcolour, outlinecolour);
     }
 }
 
@@ -556,7 +646,7 @@ impl Frontend {
                 draw_rect: Some(draw_rect_wrap),
                 draw_line: Some(draw_line_wrap),
                 draw_polygon: Some(draw_polygon_wrap),
-                draw_circle: None,
+                draw_circle: Some(draw_circle_wrap),
                 draw_update: None,
                 clip: None,
                 unclip: None,
