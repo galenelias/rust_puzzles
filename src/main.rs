@@ -34,10 +34,9 @@ fn main() -> Result<(), Error> {
 
     let mut frontend = Frontend::new();
     frontend.new_mines();
-
-    frontend.redraw();
-
+    frontend.new_game();
     frontend.set_size();
+    frontend.redraw();
 
     println!("Made mines??");
 

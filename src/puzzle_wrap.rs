@@ -27,7 +27,7 @@ pub struct DrawingApiFFI {
 
     pub draw_text: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             x: c_int,
             y: c_int,
             fonttype: c_int,
@@ -49,7 +49,7 @@ pub struct DrawingApiFFI {
     >,
     pub draw_line: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             x1: c_int,
             y1: c_int,
             x2: c_int,
@@ -59,7 +59,7 @@ pub struct DrawingApiFFI {
     >,
     pub draw_polygon: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             coords: *const c_int,
             npoints: c_int,
             fillcolour: c_int,
@@ -68,7 +68,7 @@ pub struct DrawingApiFFI {
     >,
     pub draw_circle: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             cx: c_int,
             cy: c_int,
             radius: c_int,
@@ -77,25 +77,25 @@ pub struct DrawingApiFFI {
         ),
     >,
     pub draw_update:
-        Option<unsafe extern "C" fn(dr: *mut drawing, x: c_int, y: c_int, w: c_int, h: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, x: c_int, y: c_int, w: c_int, h: c_int)>,
     pub clip:
-        Option<unsafe extern "C" fn(dr: *mut drawing, x: c_int, y: c_int, w: c_int, h: c_int)>,
-    pub unclip: Option<unsafe extern "C" fn(dr: *mut drawing)>,
-    pub start_draw: Option<unsafe extern "C" fn(dr: *mut drawing)>,
-    pub end_draw: Option<unsafe extern "C" fn(dr: *mut drawing)>,
-    pub status_bar: Option<unsafe extern "C" fn(dr: *mut drawing, text: *const c_char)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, x: c_int, y: c_int, w: c_int, h: c_int)>,
+    pub unclip: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
+    pub start_draw: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
+    pub end_draw: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
+    pub status_bar: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, text: *const c_char)>,
     pub blitter_new:
-        Option<unsafe extern "C" fn(dr: *mut drawing, w: c_int, h: c_int) -> *mut blitter>,
-    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut drawing, bl: *mut blitter)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, w: c_int, h: c_int) -> *mut blitter>,
+    pub blitter_free: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter)>,
     pub blitter_save:
-        Option<unsafe extern "C" fn(dr: *mut drawing, bl: *mut blitter, x: c_int, y: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter, x: c_int, y: c_int)>,
     pub blitter_load:
-        Option<unsafe extern "C" fn(dr: *mut drawing, bl: *mut blitter, x: c_int, y: c_int)>,
-    pub begin_doc: Option<unsafe extern "C" fn(dr: *mut drawing, pages: c_int)>,
-    pub begin_page: Option<unsafe extern "C" fn(dr: *mut drawing, number: c_int)>,
+        Option<unsafe extern "C" fn(dr: *mut DrawingFFI, bl: *mut blitter, x: c_int, y: c_int)>,
+    pub begin_doc: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, pages: c_int)>,
+    pub begin_page: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, number: c_int)>,
     pub begin_puzzle: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             xm: c_float,
             xc: c_float,
             ym: c_float,
@@ -105,21 +105,21 @@ pub struct DrawingApiFFI {
             wmm: c_float,
         ),
     >,
-    pub end_puzzle: Option<unsafe extern "C" fn(dr: *mut drawing)>,
-    pub end_page: Option<unsafe extern "C" fn(dr: *mut drawing, number: c_int)>,
-    pub end_doc: Option<unsafe extern "C" fn(dr: *mut drawing)>,
-    pub line_width: Option<unsafe extern "C" fn(dr: *mut drawing, width: c_float)>,
-    pub line_dotted: Option<unsafe extern "C" fn(dr: *mut drawing, dotted: bool)>,
+    pub end_puzzle: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
+    pub end_page: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, number: c_int)>,
+    pub end_doc: Option<unsafe extern "C" fn(dr: *mut DrawingFFI)>,
+    pub line_width: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, width: c_float)>,
+    pub line_dotted: Option<unsafe extern "C" fn(dr: *mut DrawingFFI, dotted: bool)>,
     pub text_fallback: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             strings: *const *const c_char,
             nstrings: c_int,
         ) -> *mut c_char,
     >,
     pub draw_thick_line: Option<
         unsafe extern "C" fn(
-            dr: *mut drawing,
+            dr: *mut DrawingFFI,
             thickness: c_float,
             x1: c_float,
             y1: c_float,
@@ -180,6 +180,10 @@ unsafe extern "C" {
         user_size: bool,
         device_pixel_ratio: c_double,
     );
+
+    // void midend_new_game(midend *me);
+    fn midend_new_game(me: *mut MidendFFI);
+
 }
 
 #[unsafe(no_mangle)]
@@ -210,11 +214,13 @@ pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsiz
 
 // void deactivate_timer(frontend *fe);
 // void activate_timer(frontend *fe);
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn deactivate_timer(fe: *mut Frontend) {
     println!("Deactivate timer called");
     // Implementation for deactivating the timer
 }
 
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn activate_timer(fe: *mut Frontend) {
     println!("Activate timer called");
     // Implementation for activating the timer
@@ -232,15 +238,36 @@ impl Drawing {
         Drawing {}
     }
 
-    fn draw_rectangle(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
+    fn draw_rect(self: &mut Drawing, x: c_int, y: c_int, w: c_int, h: c_int, colour: c_int) {
         println!(
             "Drawing rectangle at ({}, {}) with width {} and height {} and colour {}",
             x, y, w, h, colour
         );
     }
+
+    fn start_draw(self: &mut Drawing) {
+        println!("start_draw called");
+    }
+
+    fn end_draw(self: &mut Drawing) {
+        println!("end_draw called");
+    }
+
+    fn draw_polygon(
+        self: &mut Drawing,
+        points: *const c_int,
+        num_points: c_int,
+        fillcolour: c_int,
+        outlinecolour: c_int,
+    ) {
+        println!(
+            "Drawing polygon with {} points and fill colour {} and outline colour {}",
+            num_points, fillcolour, outlinecolour
+        );
+    }
 }
 
-unsafe extern "C" fn draw_rectangle_wrap(
+unsafe extern "C" fn draw_rect_wrap(
     target: *mut DrawingFFI,
     x: c_int,
     y: c_int,
@@ -249,7 +276,31 @@ unsafe extern "C" fn draw_rectangle_wrap(
     colour: c_int,
 ) {
     unsafe {
-        (*(*target).handle).draw_rectangle(x, y, w, h, colour);
+        (*(*target).handle).draw_rect(x, y, w, h, colour);
+    }
+}
+
+unsafe extern "C" fn start_draw_wrap(target: *mut DrawingFFI) {
+    unsafe {
+        (*(*target).handle).start_draw();
+    }
+}
+
+unsafe extern "C" fn end_draw_wrap(target: *mut DrawingFFI) {
+    unsafe {
+        (*(*target).handle).end_draw();
+    }
+}
+
+unsafe extern "C" fn draw_polygon_wrap(
+    target: *mut DrawingFFI,
+    coords: *const c_int,
+    npoints: c_int,
+    fillcolour: c_int,
+    outlinecolour: c_int,
+) {
+    unsafe {
+        (*(*target).handle).draw_polygon(coords, npoints, fillcolour, outlinecolour);
     }
 }
 
@@ -276,15 +327,15 @@ impl Frontend {
             drawing_ffi: DrawingApiFFI {
                 version: 1,
                 draw_text: None,
-                draw_rect: Some(draw_rectangle_wrap),
+                draw_rect: Some(draw_rect_wrap),
                 draw_line: None,
-                draw_polygon: None,
+                draw_polygon: Some(draw_polygon_wrap),
                 draw_circle: None,
                 draw_update: None,
                 clip: None,
                 unclip: None,
-                start_draw: None,
-                end_draw: None,
+                start_draw: Some(start_draw_wrap),
+                end_draw: Some(end_draw_wrap),
                 status_bar: None,
                 blitter_new: None,
                 blitter_free: None,
@@ -306,11 +357,11 @@ impl Frontend {
         }
     }
 
-    fn new_game(&mut self, game: *const GameFFI) {
-        unsafe {
-            let midend = midend_new(self, game, &self.drawing_ffi, &mut self.drawing);
-        }
-    }
+    // fn new_game(&mut self, game: *const GameFFI) {
+    //     unsafe {
+    //         let midend = midend_new(self, game, &self.drawing_ffi, &mut self.drawing);
+    //     }
+    // }
 
     pub fn new_mines(&mut self) {
         unsafe {
@@ -337,6 +388,12 @@ impl Frontend {
         }
 
         println!("Post set_size: x = {}, y = {}", x_val, y_val);
+    }
+
+    pub fn new_game(&mut self) {
+        unsafe {
+            midend_new_game(self.midend);
+        }
     }
 
     pub fn redraw(&mut self) {
