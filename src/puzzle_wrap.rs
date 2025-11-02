@@ -1,4 +1,4 @@
-use std::os::raw::{c_char, c_float, c_int, c_void};
+use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 
 // use libc::{c_int, c_void};
 unsafe extern "C" {
@@ -172,8 +172,14 @@ unsafe extern "C" {
     fn midend_redraw(me: *mut MidendFFI);
     // void fatal(const char *fmt, ...);
 
-    //  void frontend_default_colour(frontend *fe, float *output);
-
+    // void midend_size(midend *me, int *x, int *y, bool user_size, double device_pixel_ratio);
+    fn midend_size(
+        me: *mut MidendFFI,
+        x: *mut c_int,
+        y: *mut c_int,
+        user_size: bool,
+        device_pixel_ratio: c_double,
+    );
 }
 
 #[unsafe(no_mangle)]
@@ -315,6 +321,22 @@ impl Frontend {
 
             self.midend = midend;
         }
+    }
+
+    pub fn set_size(&mut self) {
+        let mut x_val: c_int = 500;
+        let mut y_val: c_int = 500;
+        unsafe {
+            midend_size(
+                self.midend,
+                &mut x_val,
+                &mut y_val,
+                false, /*user_size*/
+                1.0,   /*device_pixel_ratio*/
+            );
+        }
+
+        println!("Post set_size: x = {}, y = {}", x_val, y_val);
     }
 
     pub fn redraw(&mut self) {
