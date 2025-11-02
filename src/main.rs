@@ -108,6 +108,18 @@ fn main() -> Result<(), Error> {
                 }
             }
 
+            if input.mouse_pressed(1) {
+                if let Some((x, y)) = input.cursor() {
+                    frontend.process_input(&Input::MouseDown((MouseButton::Right, (x, y))));
+                }
+            }
+
+            if input.mouse_released(1) {
+                if let Some((x, y)) = input.cursor() {
+                    frontend.process_input(&Input::MouseUp((MouseButton::Right, (x, y))));
+                }
+            }
+
             // Update internal state and request a redraw
             shapes.draw(now.elapsed().as_secs_f32());
             window.request_redraw();
