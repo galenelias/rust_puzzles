@@ -175,6 +175,7 @@ unsafe extern "C" {
     fn midend_colours(me: *mut MidendFFI, ncolours: *mut c_int) -> *mut c_float;
     fn sfree(ptr: *mut c_void);
     fn midend_process_key(me: *mut MidendFFI, x: c_int, y: c_int, button: c_int) -> c_int;
+    fn midend_wants_statusbar(me: *mut MidendFFI) -> bool;
 }
 
 #[unsafe(no_mangle)]
@@ -824,6 +825,12 @@ impl Frontend {
         }
     }
 
+    pub fn wants_statusbar(&self) -> bool {
+        unsafe {
+            midend_wants_statusbar(self.midend)
+        }
+    }
+
     pub fn tick(&mut self) {
         // We can't call this with tiny elapsed times, otherwise the midend code doesn't
         // accumulate the time correctly, and the timer will not work properly.
@@ -837,6 +844,10 @@ impl Frontend {
             }
             self.timer_start = Instant::now();
         }
+    }
+
+    pub fn is_timer_active(&self) -> bool {
+        self.is_timer_active
     }
 
     pub fn process_input(&mut self, input: &Input) {

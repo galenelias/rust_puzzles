@@ -8,10 +8,11 @@ use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::EventLoopBuilder;
+use winit::event_loop::{EventLoopBuilder, ControlFlow};
 use winit::keyboard::KeyCode;
 use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
+use std::time;
 
 mod puzzle_wrap;
 
@@ -54,6 +55,8 @@ fn main() -> Result<(), Error> {
     frontend.set_size(WIDTH, HEIGHT);
     frontend.redraw();
 
+    println!("Game wants statusbar?: {}", frontend.wants_statusbar());
+
     let event_loop_proxy = event_loop.create_proxy();
     frontend.set_end_draw_callback(move || {
         event_loop_proxy
@@ -61,7 +64,8 @@ fn main() -> Result<(), Error> {
             .unwrap();
     });
 
-    let res = event_loop.run(|event, elwt| {
+
+    let res = event_loop.run(|event, event_loop| {
         // TODO: Ensure we get events on some cadence.  This can currently be starved
         frontend.tick(); // Give a chance for timers to run.
 
@@ -69,7 +73,7 @@ fn main() -> Result<(), Error> {
         if input.update(&event) {
             // Close events
             if input.key_pressed(KeyCode::Escape) || input.close_requested() {
-                elwt.exit();
+                event_loop.exit();
                 return;
             }
 
@@ -77,7 +81,7 @@ fn main() -> Result<(), Error> {
             if let Some(size) = input.window_resized() {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
                     log_error("pixels.resize_surface", err);
-                    elwt.exit();
+                    event_loop.exit();
                     return;
                 }
             }
@@ -139,7 +143,7 @@ fn main() -> Result<(), Error> {
 
                         if let Err(err) = pixels.render() {
                             log_error("pixels.render", err);
-                            elwt.exit();
+                            event_loop.exit();
                             return;
                         }
                     }
@@ -153,6 +157,19 @@ fn main() -> Result<(), Error> {
                     window.request_redraw();
                 }
             },
+            Event::AboutToWait => {
+                // If we have a timer active then we need to make sure we wake up after some interval
+                // so we can drive the timer - otherwise we could get starved waiting for events
+                if frontend.is_timer_active() {
+                    const WAIT_TIME: time::Duration = time::Duration::from_millis(50);
+                    event_loop.set_control_flow(ControlFlow::WaitUntil(
+                        time::Instant::now() + WAIT_TIME,
+                    ));
+                } else {
+                    event_loop.set_control_flow(ControlFlow::Wait);
+                }
+            }
+
             _ => {
                 // println!("Other event: {:?}", event)
             }
