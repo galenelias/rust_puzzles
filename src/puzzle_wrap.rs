@@ -360,10 +360,12 @@ impl Drawing {
         let start = get_point(0);
         pb.move_to(start.0, start.1);
 
-        for i in 0..num_points {
+        for i in 1..num_points {
             let pt = get_point(i);
             pb.line_to(pt.0, pt.1);
         }
+
+        pb.line_to(start.0, start.1);
 
         let path = pb.finish();
 
