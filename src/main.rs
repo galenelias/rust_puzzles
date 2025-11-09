@@ -77,6 +77,16 @@ fn main() -> Result<(), Error> {
                 return;
             }
 
+            if input.key_pressed(KeyCode::ArrowLeft) {
+                frontend.process_input(&Input::KeyDown((KeyCode::ArrowLeft)));
+            } else if input.key_pressed(KeyCode::ArrowRight) {
+                frontend.process_input(&Input::KeyDown((KeyCode::ArrowRight)));
+            } else if input.key_pressed(KeyCode::ArrowUp) {
+                frontend.process_input(&Input::KeyDown((KeyCode::ArrowUp)));
+            } else if input.key_pressed(KeyCode::ArrowDown) {
+                frontend.process_input(&Input::KeyDown((KeyCode::ArrowDown)));
+            }
+
             // Resize the window
             if let Some(size) = input.window_resized() {
                 if let Err(err) = pixels.resize_surface(size.width, size.height) {
@@ -161,7 +171,7 @@ fn main() -> Result<(), Error> {
                 // If we have a timer active then we need to make sure we wake up after some interval
                 // so we can drive the timer - otherwise we could get starved waiting for events
                 if frontend.is_timer_active() {
-                    const WAIT_TIME: time::Duration = time::Duration::from_millis(50);
+                    const WAIT_TIME: time::Duration = time::Duration::from_millis(10);
                     event_loop.set_control_flow(ControlFlow::WaitUntil(
                         time::Instant::now() + WAIT_TIME,
                     ));

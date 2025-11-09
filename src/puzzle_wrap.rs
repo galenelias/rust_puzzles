@@ -13,6 +13,7 @@ use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
+use winit::keyboard::KeyCode;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 use std::time::Instant;
@@ -677,6 +678,7 @@ pub enum Input {
     MouseDown((MouseButton, (f32, f32))),
     MouseHeld((MouseButton, (f32, f32))),
     MouseUp((MouseButton, (f32, f32))),
+    KeyDown(winit::keyboard::KeyCode),
 }
 
 const LEFT_BUTTON: c_int = 0x200;
@@ -685,6 +687,10 @@ const LEFT_DRAG: c_int = 0x203;
 const RIGHT_DRAG: c_int = 0x205;
 const LEFT_RELEASE: c_int = 0x206;
 const RIGHT_RELEASE: c_int = 0x208;
+const CURSOR_UP: c_int = 0x209;
+const CURSOR_DOWN: c_int = 0x20A;
+const CURSOR_LEFT: c_int = 0x20B;
+const CURSOR_RIGHT: c_int = 0x20C;
 
 // const ALIGN_VNORMAL: c_int = 0x000;
 const ALIGN_VCENTRE: c_int = 0x100;
@@ -836,7 +842,7 @@ impl Frontend {
     pub fn tick(&mut self) {
         // We can't call this with tiny elapsed times, otherwise the midend code doesn't
         // accumulate the time correctly, and the timer will not work properly.
-        if self.is_timer_active && self.timer_start.elapsed().as_millis() > 10 {
+        if self.is_timer_active && self.timer_start.elapsed().as_millis() >= 10 {
             // println!(
             //     "Pulsing timer: {}",
             //     self.timer_start.elapsed().as_secs_f32()
@@ -860,12 +866,18 @@ impl Frontend {
             Input::MouseHeld((MouseButton::Right, _)) => RIGHT_DRAG,
             Input::MouseUp((MouseButton::Left, _)) => LEFT_RELEASE,
             Input::MouseUp((MouseButton::Right, _)) => RIGHT_RELEASE,
+            Input::KeyDown(KeyCode::ArrowLeft) => CURSOR_LEFT,
+            Input::KeyDown(KeyCode::ArrowDown) => CURSOR_DOWN,
+            Input::KeyDown(KeyCode::ArrowRight) => CURSOR_RIGHT,
+            Input::KeyDown(KeyCode::ArrowUp) => CURSOR_UP,
+            _ => unreachable!()
         };
 
         let (x, y) = match input {
             Input::MouseDown((_, (x, y)))
             | Input::MouseHeld((_, (x, y)))
             | Input::MouseUp((_, (x, y))) => (*x as c_int, *y as c_int),
+            Input::KeyDown(keycode) => (0, 0),
         };
 
         // TODO: Handle retina resolution. Mac mouse events don't map to logical coordinates.
