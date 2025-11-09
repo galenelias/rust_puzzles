@@ -346,7 +346,7 @@ impl Drawing {
         points: *const c_int,
         num_points: c_int,
         fillcolour: c_int,
-        _outlinecolour: c_int,
+        outlinecolour: c_int,
     ) {
         let mut pb = PathBuilder::new();
 
@@ -366,25 +366,20 @@ impl Drawing {
 
         let path = pb.finish();
 
-        self.dt.fill(
+        if fillcolour != -1 {
+            self.dt.fill(
+                &path,
+                &Source::Solid(self.colours_source[fillcolour as usize]),
+                &DrawOptions::new(),
+            );
+        }
+
+        self.dt.stroke(
             &path,
-            &Source::Solid(self.colours_source[fillcolour as usize]),
+            &Source::Solid(self.colours_source[outlinecolour as usize]),
+            &StrokeStyle::default(),
             &DrawOptions::new(),
         );
-
-        // self.dt.stroke(
-        //     &path,
-        //     &Source::Solid(self.colours_source[colour as usize]),
-        //     &StrokeStyle {
-        //         cap: LineCap::Round,
-        //         join: LineJoin::Round,
-        //         width: 10.,
-        //         miter_limit: 2.,
-        //         dash_array: vec![10., 18.],
-        //         dash_offset: 16.,
-        //     },
-        //     &DrawOptions::new(),
-        // );
     }
 
     fn draw_line(self: &mut Drawing, x1: c_int, y1: c_int, x2: c_int, y2: c_int, colour: c_int) {
@@ -408,13 +403,22 @@ impl Drawing {
         y: c_int,
         radius: c_int,
         fillcolour: c_int,
-        _outlinecolour: c_int, // TODO
+        outlinecolour: c_int,
     ) {
         let path = build_circle(radius as f32, x as f32, y as f32);
 
-        self.dt.fill(
+        if fillcolour != -1 {
+            self.dt.fill(
+                &path,
+                &Source::Solid(self.colours_source[fillcolour as usize]),
+                &DrawOptions::new(),
+            );
+        }
+
+        self.dt.stroke(
             &path,
-            &Source::Solid(self.colours_source[fillcolour as usize]),
+            &Source::Solid(self.colours_source[outlinecolour as usize]),
+            &StrokeStyle::default(),
             &DrawOptions::new(),
         );
     }
