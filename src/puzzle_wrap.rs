@@ -290,6 +290,9 @@ struct Drawing {
     colours: Vec<PuzColor>,
     colours_source: Vec<SolidSource>,
     end_draw_callback: Option<Box<dyn Fn() + 'static>>,
+    status_text: Option<String>,
+    width: u32,
+    height: u32,
 }
 
 impl Drawing {
@@ -299,6 +302,9 @@ impl Drawing {
             colours: Vec::new(),
             colours_source: Vec::new(),
             end_draw_callback: None,
+            status_text: None,
+            width,
+            height,
         };
         return drawing;
     }
@@ -323,6 +329,11 @@ impl Drawing {
     }
 
     fn end_draw(self: &mut Drawing) {
+        // Draw status bar if there's status text
+        if let Some(ref status_text) = self.status_text.clone() {
+            self.draw_status_bar(status_text);
+        }
+
         if let Some(ref callback) = self.end_draw_callback {
             callback();
         }
@@ -531,6 +542,63 @@ impl Drawing {
             IntPoint::new(x, y),
         );
     }
+
+    fn draw_status_bar(&mut self, text: &str) {
+        const STATUS_BAR_HEIGHT: i32 = 30;
+        const FONT_SIZE: f32 = 14.0;
+        const PADDING: f32 = 8.0;
+
+        let status_bar_y = self.height as i32 - STATUS_BAR_HEIGHT;
+
+        // Draw status bar background with a light gray color
+        let status_bg = SolidSource::from_unpremultiplied_argb(0xff, 0xe0, 0xe0, 0xe0);
+
+        self.dt.fill_rect(
+            0.0,
+            status_bar_y as f32,
+            self.width as f32,
+            STATUS_BAR_HEIGHT as f32,
+            &Source::Solid(status_bg),
+            &DrawOptions::new(),
+        );
+
+        // Draw a separator line at the top of the status bar
+        let separator_color = SolidSource::from_unpremultiplied_argb(0xff, 0x80, 0x80, 0x80);
+        self.dt.fill_rect(
+            0.0,
+            status_bar_y as f32,
+            self.width as f32,
+            1.0,
+            &Source::Solid(separator_color),
+            &DrawOptions::new(),
+        );
+
+        // Draw the status text
+        let font = SystemSource::new()
+            .select_best_match(&[FamilyName::SansSerif], &Properties::new())
+            .unwrap()
+            .load()
+            .unwrap();
+
+        // Use a dark color for the text
+        let text_color = SolidSource::from_unpremultiplied_argb(0xff, 0x00, 0x00, 0x00);
+
+        // Position text with padding from the left edge and vertically centered
+        let text_y = status_bar_y as f32 + (STATUS_BAR_HEIGHT as f32 / 2.0) + (FONT_SIZE / 2.5);
+
+        self.dt.draw_text(
+            &font,
+            FONT_SIZE,
+            text,
+            Point::new(PADDING, text_y),
+            &Source::Solid(text_color),
+            &DrawOptions::new(),
+        );
+    }
+
+    fn set_status_text(&mut self, text: String) {
+        self.status_text = Some(text);
+    }
 }
 
 unsafe extern "C" fn draw_rect_wrap(
@@ -575,7 +643,8 @@ unsafe extern "C" fn end_draw_wrap(target: *mut DrawingFFI) {
 
 unsafe extern "C" fn status_bar_wrap(target: *mut DrawingFFI, text: *const c_char) {
     let text_str = unsafe { CStr::from_ptr(text).to_string_lossy().into_owned() };
-    println!("Status bar: {}", text_str);
+    let drawing = unsafe { &mut *((*target).handle as *mut Drawing) };
+    drawing.set_status_text(text_str);
 }
 
 unsafe extern "C" fn draw_polygon_wrap(
