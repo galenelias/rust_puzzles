@@ -573,6 +573,11 @@ unsafe extern "C" fn end_draw_wrap(target: *mut DrawingFFI) {
     }
 }
 
+unsafe extern "C" fn status_bar_wrap(target: *mut DrawingFFI, text: *const c_char) {
+    let text_str = unsafe { CStr::from_ptr(text).to_string_lossy().into_owned() };
+    println!("Status bar: {}", text_str);
+}
+
 unsafe extern "C" fn draw_polygon_wrap(
     target: *mut DrawingFFI,
     coords: *const c_int,
@@ -724,7 +729,7 @@ impl Frontend {
                 unclip: Some(unclip_wrap),
                 start_draw: Some(start_draw_wrap),
                 end_draw: Some(end_draw_wrap),
-                status_bar: None,
+                status_bar: Some(status_bar_wrap),
                 blitter_new: Some(blitter_new_wrap),
                 blitter_free: Some(blitter_free_wrap),
                 blitter_save: Some(blitter_save_wrap),
