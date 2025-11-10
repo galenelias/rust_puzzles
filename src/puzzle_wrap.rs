@@ -877,7 +877,7 @@ impl Frontend {
             Input::MouseDown((_, (x, y)))
             | Input::MouseHeld((_, (x, y)))
             | Input::MouseUp((_, (x, y))) => (*x as c_int, *y as c_int),
-            Input::KeyDown(keycode) => (0, 0),
+            Input::KeyDown(_) => (0, 0),
         };
 
         // TODO: Handle retina resolution. Mac mouse events don't map to logical coordinates.

@@ -78,13 +78,13 @@ fn main() -> Result<(), Error> {
             }
 
             if input.key_pressed(KeyCode::ArrowLeft) {
-                frontend.process_input(&Input::KeyDown((KeyCode::ArrowLeft)));
+                frontend.process_input(&Input::KeyDown(KeyCode::ArrowLeft));
             } else if input.key_pressed(KeyCode::ArrowRight) {
-                frontend.process_input(&Input::KeyDown((KeyCode::ArrowRight)));
+                frontend.process_input(&Input::KeyDown(KeyCode::ArrowRight));
             } else if input.key_pressed(KeyCode::ArrowUp) {
-                frontend.process_input(&Input::KeyDown((KeyCode::ArrowUp)));
+                frontend.process_input(&Input::KeyDown(KeyCode::ArrowUp));
             } else if input.key_pressed(KeyCode::ArrowDown) {
-                frontend.process_input(&Input::KeyDown((KeyCode::ArrowDown)));
+                frontend.process_input(&Input::KeyDown(KeyCode::ArrowDown));
             }
 
             // Resize the window
