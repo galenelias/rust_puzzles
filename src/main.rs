@@ -27,13 +27,19 @@ enum PuzzleEvents {
 fn main() -> Result<(), Error> {
     env_logger::init();
 
+    let mut frontend = Frontend::new();
+    frontend.new_midend();
+    frontend.new_game();
+    let (actual_width, actual_height) = frontend.set_size(WIDTH, HEIGHT);
+    frontend.redraw();
+
     // let event_loop = EventLoop::new().unwrap();
     let event_loop = EventLoopBuilder::<PuzzleEvents>::with_user_event()
         .build()
         .unwrap();
     let mut input = WinitInputHelper::new();
     let window = {
-        let size = LogicalSize::new(WIDTH as f64, HEIGHT as f64);
+        let size = LogicalSize::new(actual_width as f64, actual_height as f64);
         WindowBuilder::new()
             .with_title("Rusty Puzzles")
             .with_inner_size(size)
@@ -46,16 +52,8 @@ fn main() -> Result<(), Error> {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
 
-        Pixels::new(WIDTH, HEIGHT, surface_texture)?
+        Pixels::new(actual_width, actual_height, surface_texture)?
     };
-
-    let mut frontend = Frontend::new(WIDTH, HEIGHT);
-    frontend.new_mines();
-    frontend.new_game();
-    frontend.set_size(WIDTH, HEIGHT);
-    frontend.redraw();
-
-    println!("Game wants statusbar?: {}", frontend.wants_statusbar());
 
     let event_loop_proxy = event_loop.create_proxy();
     frontend.set_end_draw_callback(move || {
@@ -66,7 +64,6 @@ fn main() -> Result<(), Error> {
 
 
     let res = event_loop.run(|event, event_loop| {
-        // TODO: Ensure we get events on some cadence.  This can currently be starved
         frontend.tick(); // Give a chance for timers to run.
 
         // Handle input events

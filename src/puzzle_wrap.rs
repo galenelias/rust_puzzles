@@ -23,6 +23,7 @@ unsafe extern "C" {
 }
 
 const PIXEL_RATIO: f32 = 2.;
+const STATUS_BAR_HEIGHT: i32 = 30;
 
 pub struct Blitter {
     dt: DrawTarget,
@@ -309,6 +310,12 @@ impl Drawing {
         return drawing;
     }
 
+    fn set_size(&mut self, width: u32, height: u32) {
+        self.width = width;
+        self.height = height;
+        self.dt = DrawTarget::new(width as i32, height as i32);
+    }
+
     /// Gain access to the underlying pixels
     pub fn frame(&self) -> &[u32] {
         self.dt.get_data()
@@ -544,7 +551,6 @@ impl Drawing {
     }
 
     fn draw_status_bar(&mut self, text: &str) {
-        const STATUS_BAR_HEIGHT: i32 = 30;
         const FONT_SIZE: f32 = 14.0;
         const PADDING: f32 = 8.0;
 
@@ -783,7 +789,7 @@ pub struct Frontend {
 }
 
 impl Frontend {
-    pub fn new(width: u32, height: u32) -> Self {
+    pub fn new() -> Self {
         Self {
             midend: std::ptr::null_mut(),
             drawing_ffi: DrawingApiFFI {
@@ -814,7 +820,7 @@ impl Frontend {
                 text_fallback: None,
                 draw_thick_line: None,
             },
-            drawing: Drawing::new(width, height),
+            drawing: Drawing::new(1, 1),
             colours: Vec::new(),
             is_timer_active: false,
             timer_start: Instant::now(),
@@ -834,7 +840,7 @@ impl Frontend {
         self.drawing.set_end_draw_callback(callback);
     }
 
-    pub fn new_mines(&mut self) {
+    pub fn new_midend(&mut self) {
         unsafe {
             let midend = midend_new(self, &thegame, &self.drawing_ffi, &mut self.drawing);
 
@@ -843,9 +849,14 @@ impl Frontend {
         }
     }
 
-    pub fn set_size(&mut self, width: u32, height: u32) {
+    pub fn set_size(&mut self, width: u32, height: u32) -> (u32, u32) {
         let mut x_val = width as c_int;
         let mut y_val = height as c_int;
+
+        if self.wants_statusbar() {
+            y_val -= STATUS_BAR_HEIGHT;
+        }
+
         unsafe {
             midend_size(
                 self.midend,
@@ -856,7 +867,14 @@ impl Frontend {
             );
         }
 
+        if self.wants_statusbar() {
+            y_val += STATUS_BAR_HEIGHT;
+        }
+
+        self.drawing.set_size(x_val as u32, y_val as u32);
         self.drawing.clear();
+
+        (x_val as u32, y_val as u32)
     }
 
     fn sync_colors(&mut self) {
