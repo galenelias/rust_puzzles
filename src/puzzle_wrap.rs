@@ -8,7 +8,7 @@ use font_kit::loaders::core_text::Font;
 #[cfg(target_os = "windows")]
 use font_kit::loaders::directwrite::Font;
 
-use font_kit::properties::Properties;
+use font_kit::properties::{Properties, Stretch};
 use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::Vector2F;
@@ -551,7 +551,7 @@ impl Drawing {
     }
 
     fn draw_status_bar(&mut self, text: &str) {
-        const FONT_SIZE: f32 = 14.0;
+        const FONT_SIZE: f32 = 16.0;
         const PADDING: f32 = 8.0;
 
         let status_bar_y = self.height as i32 - STATUS_BAR_HEIGHT;
@@ -581,7 +581,7 @@ impl Drawing {
 
         // Draw the status text
         let font = SystemSource::new()
-            .select_best_match(&[FamilyName::SansSerif], &Properties::new())
+            .select_best_match(&[FamilyName::Monospace], &Properties::new().stretch(Stretch::ULTRA_EXPANDED))
             .unwrap()
             .load()
             .unwrap();
