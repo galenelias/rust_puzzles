@@ -8,9 +8,9 @@ use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{ElementState, MouseButton as WinitMouseButton, WindowEvent};
+use winit::event::{ElementState, KeyEvent, MouseButton as WinitMouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::keyboard::{Key, KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 use std::sync::Arc;
 use std::time;
@@ -98,29 +98,23 @@ impl ApplicationHandler<PuzzleEvents> for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::KeyboardInput { event: key_event, .. } => {
-                if key_event.state == ElementState::Pressed {
-                    if let PhysicalKey::Code(keycode) = key_event.physical_key {
+            WindowEvent::KeyboardInput {
+                event: KeyEvent { logical_key: key, physical_key, state: ElementState::Pressed, .. }, .. } => {
+                    if let Key::Character(character) = key {
+                        self.frontend.process_input(&Input::KeyDown(puzzle_wrap::Key::Character(character.chars().next().unwrap())));
+                    }
+
+                    if let PhysicalKey::Code(keycode) = physical_key {
                         match keycode {
                             KeyCode::Escape => {
                                 event_loop.exit();
                             }
-                            KeyCode::ArrowLeft => {
-                                self.frontend.process_input(&Input::KeyDown(keycode));
-                            }
-                            KeyCode::ArrowRight => {
-                                self.frontend.process_input(&Input::KeyDown(keycode));
-                            }
-                            KeyCode::ArrowUp => {
-                                self.frontend.process_input(&Input::KeyDown(keycode));
-                            }
-                            KeyCode::ArrowDown => {
-                                self.frontend.process_input(&Input::KeyDown(keycode));
+                            KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown => {
+                                self.frontend.process_input(&Input::KeyDown(puzzle_wrap::Key::Special(keycode)));
                             }
                             _ => {}
                         }
                     }
-                }
             }
             WindowEvent::Resized(size) => {
                 if let Some(pixels) = &mut self.pixels {

@@ -754,11 +754,16 @@ pub enum MouseButton {
     Right,
 }
 
+pub enum Key {
+    Character(char),
+    Special(KeyCode),
+}
+
 pub enum Input {
     MouseDown((MouseButton, (f32, f32))),
     MouseHeld((MouseButton, (f32, f32))),
     MouseUp((MouseButton, (f32, f32))),
-    KeyDown(winit::keyboard::KeyCode),
+    KeyDown(Key),
 }
 
 const LEFT_BUTTON: c_int = 0x200;
@@ -958,10 +963,11 @@ impl Frontend {
             Input::MouseHeld((MouseButton::Right, _)) => RIGHT_DRAG,
             Input::MouseUp((MouseButton::Left, _)) => LEFT_RELEASE,
             Input::MouseUp((MouseButton::Right, _)) => RIGHT_RELEASE,
-            Input::KeyDown(KeyCode::ArrowLeft) => CURSOR_LEFT,
-            Input::KeyDown(KeyCode::ArrowDown) => CURSOR_DOWN,
-            Input::KeyDown(KeyCode::ArrowRight) => CURSOR_RIGHT,
-            Input::KeyDown(KeyCode::ArrowUp) => CURSOR_UP,
+            Input::KeyDown(Key::Special(KeyCode::ArrowLeft)) => CURSOR_LEFT,
+            Input::KeyDown(Key::Special(KeyCode::ArrowDown)) => CURSOR_DOWN,
+            Input::KeyDown(Key::Special(KeyCode::ArrowRight)) => CURSOR_RIGHT,
+            Input::KeyDown(Key::Special(KeyCode::ArrowUp)) => CURSOR_UP,
+            Input::KeyDown(Key::Character(character)) => *character as i32,
             _ => unreachable!()
         };
 
