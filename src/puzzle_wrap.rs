@@ -13,10 +13,10 @@ use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
-use winit::keyboard::KeyCode;
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
 use std::time::Instant;
+use winit::keyboard::KeyCode;
 
 unsafe extern "C" {
     static thegame: GameFFI;
@@ -545,7 +545,10 @@ impl Drawing {
     fn blitter_load(self: &mut Drawing, blitter: &mut Blitter, x: i32, y: i32) {
         self.dt.copy_surface(
             &blitter.dt,
-            IntRect::new(IntPoint::new(0, 0), IntPoint::new(blitter.width, blitter.height)),
+            IntRect::new(
+                IntPoint::new(0, 0),
+                IntPoint::new(blitter.width, blitter.height),
+            ),
             IntPoint::new(x, y),
         );
     }
@@ -581,7 +584,10 @@ impl Drawing {
 
         // Draw the status text
         let font = SystemSource::new()
-            .select_best_match(&[FamilyName::Monospace], &Properties::new().stretch(Stretch::ULTRA_EXPANDED))
+            .select_best_match(
+                &[FamilyName::Monospace],
+                &Properties::new().stretch(Stretch::ULTRA_EXPANDED),
+            )
             .unwrap()
             .load()
             .unwrap();
@@ -931,9 +937,7 @@ impl Frontend {
     }
 
     pub fn wants_statusbar(&self) -> bool {
-        unsafe {
-            midend_wants_statusbar(self.midend)
-        }
+        unsafe { midend_wants_statusbar(self.midend) }
     }
 
     pub fn tick(&mut self) {
@@ -968,7 +972,7 @@ impl Frontend {
             Input::KeyDown(Key::Special(KeyCode::ArrowRight)) => CURSOR_RIGHT,
             Input::KeyDown(Key::Special(KeyCode::ArrowUp)) => CURSOR_UP,
             Input::KeyDown(Key::Character(character)) => *character as i32,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         let (x, y) = match input {

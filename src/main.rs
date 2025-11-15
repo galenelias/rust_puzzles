@@ -6,14 +6,14 @@ use crate::puzzle_wrap::{Frontend, Input, MouseButton};
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
+use std::sync::Arc;
+use std::time;
 use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
 use winit::event::{ElementState, KeyEvent, MouseButton as WinitMouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
-use std::sync::Arc;
-use std::time;
 
 mod puzzle_wrap;
 
@@ -69,7 +69,8 @@ impl ApplicationHandler<PuzzleEvents> for App {
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, window.clone());
-            let pixels = Pixels::new(self.actual_width, self.actual_height, surface_texture).unwrap();
+            let pixels =
+                Pixels::new(self.actual_width, self.actual_height, surface_texture).unwrap();
 
             window.request_redraw();
 
@@ -99,22 +100,37 @@ impl ApplicationHandler<PuzzleEvents> for App {
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput {
-                event: KeyEvent { logical_key: key, physical_key, state: ElementState::Pressed, .. }, .. } => {
-                    if let Key::Character(character) = key {
-                        self.frontend.process_input(&Input::KeyDown(puzzle_wrap::Key::Character(character.chars().next().unwrap())));
-                    }
+                event:
+                    KeyEvent {
+                        logical_key: key,
+                        physical_key,
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                if let Key::Character(character) = key {
+                    self.frontend
+                        .process_input(&Input::KeyDown(puzzle_wrap::Key::Character(
+                            character.chars().next().unwrap(),
+                        )));
+                }
 
-                    if let PhysicalKey::Code(keycode) = physical_key {
-                        match keycode {
-                            KeyCode::Escape => {
-                                event_loop.exit();
-                            }
-                            KeyCode::ArrowLeft | KeyCode::ArrowRight | KeyCode::ArrowUp | KeyCode::ArrowDown => {
-                                self.frontend.process_input(&Input::KeyDown(puzzle_wrap::Key::Special(keycode)));
-                            }
-                            _ => {}
+                if let PhysicalKey::Code(keycode) = physical_key {
+                    match keycode {
+                        KeyCode::Escape => {
+                            event_loop.exit();
                         }
+                        KeyCode::ArrowLeft
+                        | KeyCode::ArrowRight
+                        | KeyCode::ArrowUp
+                        | KeyCode::ArrowDown => {
+                            self.frontend
+                                .process_input(&Input::KeyDown(puzzle_wrap::Key::Special(keycode)));
+                        }
+                        _ => {}
                     }
+                }
             }
             WindowEvent::Resized(size) => {
                 if let Some(pixels) = &mut self.pixels {
@@ -199,9 +215,7 @@ impl ApplicationHandler<PuzzleEvents> for App {
         if self.frontend.is_timer_active() {
             self.frontend.tick(); // Give a chance for timers to run.
             const WAIT_TIME: time::Duration = time::Duration::from_millis(10);
-            event_loop.set_control_flow(ControlFlow::WaitUntil(
-                time::Instant::now() + WAIT_TIME,
-            ));
+            event_loop.set_control_flow(ControlFlow::WaitUntil(time::Instant::now() + WAIT_TIME));
         } else {
             event_loop.set_control_flow(ControlFlow::Wait);
         }
