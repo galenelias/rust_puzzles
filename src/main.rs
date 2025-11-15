@@ -6,12 +6,13 @@ use crate::puzzle_wrap::{Frontend, Input, MouseButton};
 use error_iter::ErrorIter as _;
 use log::error;
 use pixels::{Error, Pixels, SurfaceTexture};
+use winit::application::ApplicationHandler;
 use winit::dpi::LogicalSize;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{EventLoopBuilder, ControlFlow};
-use winit::keyboard::KeyCode;
-use winit::window::WindowBuilder;
-use winit_input_helper::WinitInputHelper;
+use winit::event::{ElementState, MouseButton as WinitMouseButton, WindowEvent};
+use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{Window, WindowAttributes, WindowId};
+use std::sync::Arc;
 use std::time;
 
 mod puzzle_wrap;
@@ -24,164 +25,212 @@ enum PuzzleEvents {
     RedrawRequested,
 }
 
+struct App {
+    window: Option<Arc<Window>>,
+    pixels: Option<Pixels<'static>>,
+    frontend: Box<Frontend>,
+    actual_width: u32,
+    actual_height: u32,
+    cursor_position: Option<(f32, f32)>,
+    mouse_state: [bool; 2], // Left, Right
+}
+
+impl App {
+    fn new() -> Self {
+        // Ensure the frontend is in a Box so that the pointers we pass to the midend FFI layer don't shift
+        let mut frontend = Box::new(Frontend::new());
+        frontend.new_midend();
+        frontend.new_game();
+        let (actual_width, actual_height) = frontend.set_size(WIDTH, HEIGHT);
+        frontend.redraw();
+
+        Self {
+            window: None,
+            pixels: None,
+            frontend,
+            actual_width,
+            actual_height,
+            cursor_position: None,
+            mouse_state: [false, false],
+        }
+    }
+}
+
+impl ApplicationHandler<PuzzleEvents> for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_none() {
+            let size = LogicalSize::new(self.actual_width as f64, self.actual_height as f64);
+            let window_attributes = WindowAttributes::default()
+                .with_title("Rusty Puzzles")
+                .with_inner_size(size)
+                .with_min_inner_size(size);
+
+            let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+            let window_size = window.inner_size();
+            let surface_texture =
+                SurfaceTexture::new(window_size.width, window_size.height, window.clone());
+            let pixels = Pixels::new(self.actual_width, self.actual_height, surface_texture).unwrap();
+
+            window.request_redraw();
+
+            self.window = Some(window);
+            self.pixels = Some(pixels);
+        }
+    }
+
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: PuzzleEvents) {
+        match event {
+            PuzzleEvents::RedrawRequested => {
+                if let Some(window) = &self.window {
+                    window.request_redraw();
+                }
+            }
+        }
+    }
+
+    fn window_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        _window_id: WindowId,
+        event: WindowEvent,
+    ) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+            }
+            WindowEvent::KeyboardInput { event: key_event, .. } => {
+                if key_event.state == ElementState::Pressed {
+                    if let PhysicalKey::Code(keycode) = key_event.physical_key {
+                        match keycode {
+                            KeyCode::Escape => {
+                                event_loop.exit();
+                            }
+                            KeyCode::ArrowLeft => {
+                                self.frontend.process_input(&Input::KeyDown(keycode));
+                            }
+                            KeyCode::ArrowRight => {
+                                self.frontend.process_input(&Input::KeyDown(keycode));
+                            }
+                            KeyCode::ArrowUp => {
+                                self.frontend.process_input(&Input::KeyDown(keycode));
+                            }
+                            KeyCode::ArrowDown => {
+                                self.frontend.process_input(&Input::KeyDown(keycode));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            WindowEvent::Resized(size) => {
+                if let Some(pixels) = &mut self.pixels {
+                    if let Err(err) = pixels.resize_surface(size.width, size.height) {
+                        log_error("pixels.resize_surface", err);
+                        event_loop.exit();
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor_position = Some((position.x as f32, position.y as f32));
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                let button_idx = match button {
+                    WinitMouseButton::Left => 0,
+                    WinitMouseButton::Right => 1,
+                    _ => return,
+                };
+
+                let puzzle_button = match button {
+                    WinitMouseButton::Left => MouseButton::Left,
+                    WinitMouseButton::Right => MouseButton::Right,
+                    _ => return,
+                };
+
+                if let Some((x, y)) = self.cursor_position {
+                    match state {
+                        ElementState::Pressed => {
+                            self.mouse_state[button_idx] = true;
+                            self.frontend
+                                .process_input(&Input::MouseDown((puzzle_button, (x, y))));
+                        }
+                        ElementState::Released => {
+                            self.mouse_state[button_idx] = false;
+                            self.frontend
+                                .process_input(&Input::MouseUp((puzzle_button, (x, y))));
+                        }
+                    }
+                }
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.cursor_position = None;
+            }
+            WindowEvent::RedrawRequested => {
+                if let Some(ref mut pixels) = self.pixels {
+                    for (dst, &src) in pixels
+                        .frame_mut()
+                        .chunks_exact_mut(4)
+                        .zip(self.frontend.frame().iter())
+                    {
+                        dst[0] = (src >> 16) as u8;
+                        dst[1] = (src >> 8) as u8;
+                        dst[2] = src as u8;
+                        dst[3] = (src >> 24) as u8;
+                    }
+
+                    if let Err(err) = pixels.render() {
+                        log_error("pixels.render", err);
+                        event_loop.exit();
+                    }
+                }
+            }
+            _ => {}
+        }
+
+        // Handle mouse held events
+        if let Some((x, y)) = self.cursor_position {
+            if self.mouse_state[0] {
+                self.frontend
+                    .process_input(&Input::MouseHeld((MouseButton::Left, (x, y))));
+            }
+            if self.mouse_state[1] {
+                self.frontend
+                    .process_input(&Input::MouseHeld((MouseButton::Right, (x, y))));
+            }
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        // If we have a timer active then we need to make sure we wake up after some interval
+        // so we can drive the timer - otherwise we could get starved waiting for events
+        if self.frontend.is_timer_active() {
+            self.frontend.tick(); // Give a chance for timers to run.
+            const WAIT_TIME: time::Duration = time::Duration::from_millis(10);
+            event_loop.set_control_flow(ControlFlow::WaitUntil(
+                time::Instant::now() + WAIT_TIME,
+            ));
+        } else {
+            event_loop.set_control_flow(ControlFlow::Wait);
+        }
+    }
+}
+
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let mut frontend = Frontend::new();
-    frontend.new_midend();
-    frontend.new_game();
-    let (actual_width, actual_height) = frontend.set_size(WIDTH, HEIGHT);
-    frontend.redraw();
-
-    // let event_loop = EventLoop::new().unwrap();
-    let event_loop = EventLoopBuilder::<PuzzleEvents>::with_user_event()
+    let event_loop = EventLoop::<PuzzleEvents>::with_user_event()
         .build()
         .unwrap();
-    let mut input = WinitInputHelper::new();
-    let window = {
-        let size = LogicalSize::new(actual_width as f64, actual_height as f64);
-        WindowBuilder::new()
-            .with_title("Rusty Puzzles")
-            .with_inner_size(size)
-            .with_min_inner_size(size)
-            .build(&event_loop)
-            .unwrap()
-    };
 
-    let mut pixels = {
-        let window_size = window.inner_size();
-        let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-
-        Pixels::new(actual_width, actual_height, surface_texture)?
-    };
+    let mut app = App::new();
 
     let event_loop_proxy = event_loop.create_proxy();
-    frontend.set_end_draw_callback(move || {
+    app.frontend.set_end_draw_callback(move || {
         event_loop_proxy
             .send_event(PuzzleEvents::RedrawRequested)
             .unwrap();
     });
 
-
-    let res = event_loop.run(|event, event_loop| {
-        frontend.tick(); // Give a chance for timers to run.
-
-        // Handle input events
-        if input.update(&event) {
-            // Close events
-            if input.key_pressed(KeyCode::Escape) || input.close_requested() {
-                event_loop.exit();
-                return;
-            }
-
-            if input.key_pressed(KeyCode::ArrowLeft) {
-                frontend.process_input(&Input::KeyDown(KeyCode::ArrowLeft));
-            } else if input.key_pressed(KeyCode::ArrowRight) {
-                frontend.process_input(&Input::KeyDown(KeyCode::ArrowRight));
-            } else if input.key_pressed(KeyCode::ArrowUp) {
-                frontend.process_input(&Input::KeyDown(KeyCode::ArrowUp));
-            } else if input.key_pressed(KeyCode::ArrowDown) {
-                frontend.process_input(&Input::KeyDown(KeyCode::ArrowDown));
-            }
-
-            // Resize the window
-            if let Some(size) = input.window_resized() {
-                if let Err(err) = pixels.resize_surface(size.width, size.height) {
-                    log_error("pixels.resize_surface", err);
-                    event_loop.exit();
-                    return;
-                }
-            }
-
-            if input.mouse_pressed(0) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseDown((MouseButton::Left, (x, y))));
-                }
-            }
-
-            if input.mouse_held(0) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseHeld((MouseButton::Left, (x, y))));
-                }
-            }
-
-            if input.mouse_released(0) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseUp((MouseButton::Left, (x, y))));
-                }
-            }
-
-            if input.mouse_pressed(1) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseDown((MouseButton::Right, (x, y))));
-                }
-            }
-
-            if input.mouse_held(1) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseHeld((MouseButton::Right, (x, y))));
-                }
-            }
-
-            if input.mouse_released(1) {
-                if let Some((x, y)) = input.cursor() {
-                    frontend.process_input(&Input::MouseUp((MouseButton::Right, (x, y))));
-                }
-            }
-        }
-
-        match event {
-            Event::WindowEvent {
-                window_id: _,
-                event,
-            } => {
-                match event {
-                    WindowEvent::RedrawRequested => {
-                        for (dst, &src) in pixels
-                            .frame_mut()
-                            .chunks_exact_mut(4)
-                            .zip(frontend.frame().iter())
-                        {
-                            dst[0] = (src >> 16) as u8;
-                            dst[1] = (src >> 8) as u8;
-                            dst[2] = src as u8;
-                            dst[3] = (src >> 24) as u8;
-                        }
-
-                        if let Err(err) = pixels.render() {
-                            log_error("pixels.render", err);
-                            event_loop.exit();
-                            return;
-                        }
-                    }
-                    _ => {
-                        // println!("Other WindowEvent event: {:?}", event)
-                    }
-                };
-            }
-            Event::UserEvent(ref event) => match event {
-                PuzzleEvents::RedrawRequested => {
-                    window.request_redraw();
-                }
-            },
-            Event::AboutToWait => {
-                // If we have a timer active then we need to make sure we wake up after some interval
-                // so we can drive the timer - otherwise we could get starved waiting for events
-                if frontend.is_timer_active() {
-                    const WAIT_TIME: time::Duration = time::Duration::from_millis(10);
-                    event_loop.set_control_flow(ControlFlow::WaitUntil(
-                        time::Instant::now() + WAIT_TIME,
-                    ));
-                } else {
-                    event_loop.set_control_flow(ControlFlow::Wait);
-                }
-            }
-
-            _ => {
-                // println!("Other event: {:?}", event)
-            }
-        }
-    });
+    let res = event_loop.run_app(&mut app);
     res.map_err(|e| Error::UserDefined(Box::new(e)))
 }
 
