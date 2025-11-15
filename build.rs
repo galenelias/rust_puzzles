@@ -12,17 +12,19 @@ fn main() {
     build
         // .file("puzzles/mines.c")
         // .file("puzzles/bridges.c")
-        .file("puzzles/guess.c")
+        .file("puzzles/filling.c")
         // // common_libs
         .file("puzzles/drawing.c")
         .file("puzzles/dsf.c")
         .file("puzzles/findloop.c")
+        .file("puzzles/laydomino.c")
         .file("puzzles/malloc.c")
         .file("puzzles/matching.c")
         .file("puzzles/midend.c")
         .file("puzzles/midend.c")
         .file("puzzles/misc.c")
         .file("puzzles/random.c")
+        .file("puzzles/sort.c")
         .file("puzzles/tree234.c")
         .include("puzzles_inc");
 
