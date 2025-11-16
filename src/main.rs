@@ -1,4 +1,5 @@
 #![feature(c_variadic)]
+#![feature(c_size_t)]
 #![deny(clippy::all)]
 // #![forbid(unsafe_code)]
 

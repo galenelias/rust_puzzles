@@ -13,9 +13,9 @@ use font_kit::source::SystemSource;
 use pathfinder_geometry::transform2d::Transform2F;
 use pathfinder_geometry::vector::Vector2F;
 use raqote::*;
-use std::ffi::CStr;
+use std::ffi::{CStr, c_size_t};
 use std::os::raw::{c_char, c_double, c_float, c_int, c_void};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use winit::keyboard::KeyCode;
 
 unsafe extern "C" {
@@ -175,6 +175,7 @@ unsafe extern "C" {
     );
     fn midend_new_game(me: *mut MidendFFI);
     fn midend_colours(me: *mut MidendFFI, ncolours: *mut c_int) -> *mut c_float;
+    fn smalloc(size: c_size_t) -> *mut c_void;
     fn sfree(ptr: *mut c_void);
     fn midend_process_key(me: *mut MidendFFI, x: c_int, y: c_int, button: c_int) -> c_int;
     fn midend_wants_statusbar(me: *mut MidendFFI) -> bool;
@@ -195,14 +196,25 @@ pub unsafe extern "C" fn fatal(_fmt: *const c_char, ...) {
     println!("Fatal error!");
 }
 
-// void get_random_seed(void **randseed, int *randseedsize)
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn get_random_seed(randseed: *mut *mut c_void, randseedsize: *mut c_int) {
     unsafe {
-        let seed_value: i32 = 42;
-        let seed_ptr = Box::into_raw(Box::new(seed_value)) as *mut c_void;
-        *randseed = seed_ptr;
-        *randseedsize = std::mem::size_of::<i32>() as c_int;
+        // Get the highest resolution system time (nanoseconds since UNIX_EPOCH)
+        let now = SystemTime::now();
+        let duration = now.duration_since(UNIX_EPOCH).expect("Time went backwards");
+
+        // Store both seconds and nanoseconds for maximum resolution
+        let time_data = (duration.as_secs(), duration.subsec_nanos());
+        let size = std::mem::size_of_val(&time_data);
+
+        // The midend will free the memory with sfree, so allocate it using smalloc
+        let ptr = smalloc(size as c_size_t);
+
+        // Copy the time data to the allocated memory
+        std::ptr::copy_nonoverlapping(&time_data as *const _ as *const u8, ptr as *mut u8, size);
+
+        *randseed = ptr;
+        *randseedsize = size as c_int;
     }
 }
 
