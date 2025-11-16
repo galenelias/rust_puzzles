@@ -685,6 +685,22 @@ unsafe extern "C" fn draw_line_wrap(
     }
 }
 
+// void draw_thick_line(drawing *dr, float thickness, float x1, float y1, float x2, float y2, int colour);
+unsafe extern "C" fn draw_thick_line_wrap(
+    target: *mut DrawingFFI,
+    thickness: c_float,
+    x1: c_float,
+    y1: c_float,
+    x2: c_float,
+    y2: c_float,
+    colour: c_int,
+) {
+    println!(
+        "draw_thick_line_wrap called: target={:?}, thickness={}, x1={}, y1={}, x2={}, y2={}, colour={}",
+        target, thickness, x1, y1, x2, y2, colour
+    );
+}
+
 // void draw_text(drawing *dr, int x, int y, int fonttype, int fontsize, int align, int colour, const char *text);
 unsafe extern "C" fn draw_text_wrap(
     target: *mut DrawingFFI,
@@ -820,16 +836,16 @@ impl Frontend {
                 blitter_free: Some(blitter_free_wrap),
                 blitter_save: Some(blitter_save_wrap),
                 blitter_load: Some(blitter_load_wrap),
-                begin_doc: None,
-                begin_page: None,
-                begin_puzzle: None,
-                end_puzzle: None,
-                end_page: None,
-                end_doc: None,
-                line_width: None,
-                line_dotted: None,
+                begin_doc: None,    // Printing specific. Not implemented.
+                begin_page: None,   // Printing specific. Not implemented.
+                begin_puzzle: None, // Printing specific. Not implemented.
+                end_puzzle: None,   // Printing specific. Not implemented.
+                end_page: None,     // Printing specific. Not implemented.
+                end_doc: None,      // Printing specific. Not implemented.
+                line_width: None,   // Printing specific. Not implemented.
+                line_dotted: None,  // Printing specific. Not implemented.
                 text_fallback: None,
-                draw_thick_line: None,
+                draw_thick_line: Some(draw_thick_line_wrap),
             },
             drawing: Drawing::new(1, 1),
             colours: Vec::new(),
@@ -944,10 +960,6 @@ impl Frontend {
         // We can't call this with tiny elapsed times, otherwise the midend code doesn't
         // accumulate the time correctly, and the timer will not work properly.
         if self.is_timer_active && self.timer_start.elapsed().as_millis() >= 10 {
-            // println!(
-            //     "Pulsing timer: {}",
-            //     self.timer_start.elapsed().as_secs_f32()
-            // );
             unsafe {
                 midend_timer(self.midend, self.timer_start.elapsed().as_secs_f32());
             }
