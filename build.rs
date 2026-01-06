@@ -10,13 +10,17 @@ fn main() {
     let mut build = cc::Build::new();
 
     build
-        // .file("puzzles/mines.c")
+        .file("puzzles/mines.c")
+        // .file("puzzles/keen.c")
+        // .file("puzzles/rect.c")
         // .file("puzzles/bridges.c")
-        .file("puzzles/filling.c")
+        // .file("puzzles/filling.c")
         // // common_libs
+        .file("puzzles/divvy.c")
         .file("puzzles/drawing.c")
         .file("puzzles/dsf.c")
         .file("puzzles/findloop.c")
+        .file("puzzles/latin.c")
         .file("puzzles/laydomino.c")
         .file("puzzles/malloc.c")
         .file("puzzles/matching.c")

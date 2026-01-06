@@ -18,8 +18,8 @@ use winit::window::{Window, WindowAttributes, WindowId};
 
 mod puzzle_wrap;
 
-const WIDTH: u32 = 400;
-const HEIGHT: u32 = 400;
+const WIDTH: u32 = 800;
+const HEIGHT: u32 = 800;
 
 #[derive(Debug)]
 enum PuzzleEvents {
@@ -34,6 +34,7 @@ struct App {
     actual_height: u32,
     cursor_position: Option<(f32, f32)>,
     mouse_state: [bool; 2], // Left, Right
+    control_held: bool,
 }
 
 impl App {
@@ -53,6 +54,7 @@ impl App {
             actual_height,
             cursor_position: None,
             mouse_state: [false, false],
+            control_held: false,
         }
     }
 }
@@ -105,11 +107,22 @@ impl ApplicationHandler<PuzzleEvents> for App {
                     KeyEvent {
                         logical_key: key,
                         physical_key,
-                        state: ElementState::Pressed,
+                        state,
                         ..
                     },
                 ..
             } => {
+                // Track shift key state
+                if let PhysicalKey::Code(KeyCode::ControlLeft | KeyCode::ControlRight) =
+                    physical_key
+                {
+                    self.control_held = state == ElementState::Pressed;
+                }
+
+                if state != ElementState::Pressed {
+                    return;
+                }
+
                 if let Key::Character(character) = key {
                     self.frontend
                         .process_input(&Input::KeyDown(puzzle_wrap::Key::Character(
@@ -145,13 +158,24 @@ impl ApplicationHandler<PuzzleEvents> for App {
                 self.cursor_position = Some((position.x as f32, position.y as f32));
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                let button_idx = match button {
+                // If control is held and left button is pressed, treat it as right button
+                #[cfg(target_os = "macos")]
+                let effective_button = if self.control_held && button == WinitMouseButton::Left {
+                    WinitMouseButton::Right
+                } else {
+                    button
+                };
+
+                #[cfg(not(target_os = "macos"))]
+                let effective_button = button;
+
+                let button_idx = match effective_button {
                     WinitMouseButton::Left => 0,
                     WinitMouseButton::Right => 1,
                     _ => return,
                 };
 
-                let puzzle_button = match button {
+                let puzzle_button = match effective_button {
                     WinitMouseButton::Left => MouseButton::Left,
                     WinitMouseButton::Right => MouseButton::Right,
                     _ => return,
