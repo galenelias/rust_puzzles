@@ -157,6 +157,27 @@ pub struct MidendFFI {
     _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
 }
 
+#[repr(C)]
+pub struct GameParamsFFI {
+    _data: (),
+    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+}
+
+#[repr(C)]
+pub struct PresetMenuEntry {
+    pub title: *mut c_char,
+    pub params: *mut GameParamsFFI,
+    pub submenu: *mut PresetMenu,
+    pub id: c_int,
+}
+
+#[repr(C)]
+pub struct PresetMenu {
+    pub n_entries: c_int,
+    pub entries_size: c_int,
+    pub entries: *mut PresetMenuEntry,
+}
+
 unsafe extern "C" {
     fn midend_new(
         fe: *mut Frontend,
@@ -179,6 +200,9 @@ unsafe extern "C" {
     fn sfree(ptr: *mut c_void);
     fn midend_process_key(me: *mut MidendFFI, x: c_int, y: c_int, button: c_int) -> c_int;
     fn midend_wants_statusbar(me: *mut MidendFFI) -> bool;
+    fn midend_get_presets(me: *mut MidendFFI, id_limit: *mut c_int) -> *mut PresetMenu;
+    fn midend_set_params(me: *mut MidendFFI, params: *mut GameParamsFFI);
+    fn midend_which_preset(me: *mut MidendFFI) -> c_int;
 }
 
 #[unsafe(no_mangle)]
@@ -888,6 +912,12 @@ impl Frontend {
         }
     }
 
+    pub fn load_preset(&mut self, preset: &PresetMenuEntry) {
+        unsafe {
+            midend_set_params(self.midend, preset.params);
+        }
+    }
+
     pub fn set_size(&mut self, width: u32, height: u32) -> (u32, u32) {
         let mut x_val = width as c_int;
         let mut y_val = height as c_int;
@@ -1013,5 +1043,130 @@ impl Frontend {
         unsafe {
             midend_process_key(self.midend, x, y, button);
         }
+    }
+
+    pub fn get_presets(&self) -> Option<PresetMenuWrapper> {
+        let mut id_limit: c_int = 0;
+        unsafe {
+            let preset_menu = midend_get_presets(self.midend, &mut id_limit);
+            if preset_menu.is_null() {
+                None
+            } else {
+                Some(PresetMenuWrapper {
+                    menu: preset_menu,
+                    id_limit,
+                })
+            }
+        }
+    }
+
+    pub fn which_preset(&self) -> Option<c_int> {
+        unsafe {
+            let preset = midend_which_preset(self.midend);
+            if preset == -1 { None } else { Some(preset) }
+        }
+    }
+}
+
+/// Wrapper around the preset menu from the C library
+pub struct PresetMenuWrapper {
+    menu: *mut PresetMenu,
+    pub id_limit: c_int,
+}
+
+impl PresetMenuWrapper {
+    /// Get the number of entries in this menu
+    pub fn n_entries(&self) -> usize {
+        unsafe { (*self.menu).n_entries as usize }
+    }
+
+    /// Get a specific entry by index
+    pub fn get_entry(&self, index: usize) -> Option<PresetMenuEntryWrapper> {
+        unsafe {
+            if index < (*self.menu).n_entries as usize {
+                let entry = (*self.menu).entries.add(index);
+                Some(PresetMenuEntryWrapper { entry })
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Iterate over all entries in this menu
+    pub fn entries(&self) -> PresetMenuIterator {
+        PresetMenuIterator {
+            menu: self.menu,
+            index: 0,
+        }
+    }
+}
+
+/// Iterator over preset menu entries
+pub struct PresetMenuIterator {
+    menu: *mut PresetMenu,
+    index: usize,
+}
+
+impl Iterator for PresetMenuIterator {
+    type Item = PresetMenuEntryWrapper;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unsafe {
+            if self.index < (*self.menu).n_entries as usize {
+                let entry = (*self.menu).entries.add(self.index);
+                self.index += 1;
+                Some(PresetMenuEntryWrapper { entry })
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Wrapper around a preset menu entry
+pub struct PresetMenuEntryWrapper {
+    entry: *mut PresetMenuEntry,
+}
+
+impl PresetMenuEntryWrapper {
+    /// Get the title of this entry
+    pub fn title(&self) -> String {
+        unsafe {
+            let c_str = CStr::from_ptr((*self.entry).title);
+            c_str.to_string_lossy().into_owned()
+        }
+    }
+
+    /// Get the ID of this entry
+    pub fn id(&self) -> i32 {
+        unsafe { (*self.entry).id }
+    }
+
+    /// Check if this entry is a submenu
+    pub fn is_submenu(&self) -> bool {
+        unsafe { !(*self.entry).submenu.is_null() }
+    }
+
+    /// Get the submenu if this entry has one
+    pub fn submenu(&self) -> Option<PresetMenuWrapper> {
+        unsafe {
+            if (*self.entry).submenu.is_null() {
+                None
+            } else {
+                Some(PresetMenuWrapper {
+                    menu: (*self.entry).submenu,
+                    id_limit: 0, // submenu doesn't track id_limit separately
+                })
+            }
+        }
+    }
+
+    /// Check if this entry has params (i.e., it's an actual preset, not a submenu)
+    pub fn has_params(&self) -> bool {
+        unsafe { !(*self.entry).params.is_null() }
+    }
+
+    pub fn get_entry(&self) -> &PresetMenuEntry {
+        unsafe { &*self.entry }
     }
 }
