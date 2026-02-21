@@ -203,22 +203,21 @@ impl ApplicationHandler<PuzzleEvents> for App {
                                 let (actual_width, actual_height) =
                                     self.frontend.set_size(WIDTH, HEIGHT);
 
-                                println!(
-                                    "Actual width: {}, actual height: {}",
-                                    actual_width, actual_height
-                                );
+                                let window = self.window.as_mut().unwrap();
+                                let _ = window.request_inner_size(LogicalSize::new(
+                                    actual_width,
+                                    actual_height,
+                                ));
+                                let window_size = window.inner_size();
 
                                 if let Some(pixels) = &mut self.pixels {
                                     let _ = pixels.resize_buffer(actual_width, actual_height);
-                                    let _ = pixels.resize_surface(actual_width, actual_height);
+                                    let _ = pixels
+                                        .resize_surface(window_size.width, window_size.height);
                                 }
 
-                                // Resize
-                                let _ = self.window.as_mut().unwrap().request_inner_size(
-                                    LogicalSize::new(actual_width, actual_height),
-                                );
-
                                 self.frontend.redraw();
+                                window.request_redraw();
                             }
                         }
                     }
