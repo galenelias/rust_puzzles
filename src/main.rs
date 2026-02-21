@@ -41,6 +41,8 @@ struct PuzzlePreset {
 struct AppMenu {
     menu_bar: Menu,
     _file_menu: Submenu,
+    new_game_item: MenuItem,
+    restart_game_item: MenuItem,
     preset_items: Vec<PuzzlePreset>,
 }
 
@@ -66,6 +68,25 @@ impl AppMenu {
         }
 
         let file_menu = Submenu::new("&File", true);
+
+        // Add New Game and Restart Game menu items
+        let new_game_item = MenuItem::with_id(
+            "new_game",
+            "&New Game",
+            true,
+            Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyN)),
+        );
+        let restart_game_item = MenuItem::with_id(
+            "restart_game",
+            "&Restart Game",
+            true,
+            Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyR)),
+        );
+
+        file_menu
+            .append_items(&[&new_game_item, &restart_game_item])
+            .unwrap();
+
         let edit_menu = Submenu::new("&Edit", true);
         let window_menu = Submenu::new("&Window", true);
 
@@ -94,6 +115,8 @@ impl AppMenu {
         Self {
             menu_bar,
             _file_menu: file_menu,
+            new_game_item,
+            restart_game_item,
             preset_items,
         }
     }
@@ -149,6 +172,53 @@ impl App {
                 .set_checked(Some(index as i32) == current_preset);
         }
     }
+
+    fn new_game(&mut self) {
+        self.frontend.new_game();
+        self.frontend.redraw();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    fn restart_game(&mut self) {
+        self.frontend.restart_game();
+        self.frontend.redraw();
+        if let Some(window) = &self.window {
+            window.request_redraw();
+        }
+    }
+
+    fn handle_preset_menu_event(&mut self, event: muda::MenuEvent) {
+        for preset in &self.app_menu.preset_items {
+            if event.id() == preset.menu_item.id() {
+                // TODO: Can we save off the preset easily to avoid refetching them all from the frontend?
+                let presets = self.frontend.get_presets().unwrap();
+                for entry in presets.entries() {
+                    if entry.id() == preset.id {
+                        self.frontend.load_preset(entry.get_entry());
+                        self.frontend.new_game();
+
+                        let (actual_width, actual_height) = self.frontend.set_size(WIDTH, HEIGHT);
+
+                        let window = self.window.as_mut().unwrap();
+                        let _ = window
+                            .request_inner_size(LogicalSize::new(actual_width, actual_height));
+                        let window_size = window.inner_size();
+
+                        if let Some(pixels) = &mut self.pixels {
+                            let _ = pixels.resize_buffer(actual_width, actual_height);
+                            let _ = pixels.resize_surface(window_size.width, window_size.height);
+                        }
+
+                        self.frontend.redraw();
+                        window.request_redraw();
+                    }
+                }
+            }
+        }
+        self.update_preset_menu();
+    }
 }
 
 impl ApplicationHandler<PuzzleEvents> for App {
@@ -191,38 +261,13 @@ impl ApplicationHandler<PuzzleEvents> for App {
                 }
             }
             PuzzleEvents::MenuEvent(event) => {
-                for preset in &self.app_menu.preset_items {
-                    if event.id() == preset.menu_item.id() {
-                        // TODO: Can we save off the preset easily to avoid refetching them all from the frontend?
-                        let presets = self.frontend.get_presets().unwrap();
-                        for entry in presets.entries() {
-                            if entry.id() == preset.id {
-                                self.frontend.load_preset(entry.get_entry());
-                                self.frontend.new_game();
-
-                                let (actual_width, actual_height) =
-                                    self.frontend.set_size(WIDTH, HEIGHT);
-
-                                let window = self.window.as_mut().unwrap();
-                                let _ = window.request_inner_size(LogicalSize::new(
-                                    actual_width,
-                                    actual_height,
-                                ));
-                                let window_size = window.inner_size();
-
-                                if let Some(pixels) = &mut self.pixels {
-                                    let _ = pixels.resize_buffer(actual_width, actual_height);
-                                    let _ = pixels
-                                        .resize_surface(window_size.width, window_size.height);
-                                }
-
-                                self.frontend.redraw();
-                                window.request_redraw();
-                            }
-                        }
-                    }
+                if event.id() == self.app_menu.new_game_item.id() {
+                    self.new_game();
+                } else if event.id() == self.app_menu.restart_game_item.id() {
+                    self.restart_game();
+                } else {
+                    self.handle_preset_menu_event(event);
                 }
-                self.update_preset_menu();
             }
         }
     }

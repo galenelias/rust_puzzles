@@ -195,6 +195,7 @@ unsafe extern "C" {
         device_pixel_ratio: c_double,
     );
     fn midend_new_game(me: *mut MidendFFI);
+    fn midend_restart_game(me: *mut MidendFFI);
     fn midend_colours(me: *mut MidendFFI, ncolours: *mut c_int) -> *mut c_float;
     fn smalloc(size: c_size_t) -> *mut c_void;
     fn sfree(ptr: *mut c_void);
@@ -985,6 +986,12 @@ impl Frontend {
     pub fn new_game(&mut self) {
         unsafe {
             midend_new_game(self.midend);
+        }
+    }
+
+    pub fn restart_game(&mut self) {
+        unsafe {
+            midend_restart_game(self.midend);
         }
     }
 
