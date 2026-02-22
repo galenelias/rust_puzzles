@@ -217,7 +217,7 @@ pub extern "C" fn frontend_default_colour(_fe: *mut Frontend, output: *mut c_flo
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fatal(_fmt: *const c_char, ...) {
+pub unsafe extern "C" fn fatal(_fmt: *const c_char, _: ...) {
     println!("Fatal error!");
 }
 

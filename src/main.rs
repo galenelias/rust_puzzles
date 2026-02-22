@@ -6,8 +6,10 @@
 use crate::puzzle_wrap::{Frontend, Input, MouseButton};
 use error_iter::ErrorIter as _;
 use log::error;
+#[cfg(target_os = "macos")]
+use muda::PredefinedMenuItem;
 use muda::accelerator::{Accelerator, Code, Modifiers};
-use muda::{CheckMenuItem, CheckMenuItemBuilder, Menu, MenuItem, PredefinedMenuItem, Submenu};
+use muda::{CheckMenuItem, CheckMenuItemBuilder, Menu, MenuItem, Submenu};
 use pixels::{Error, Pixels, SurfaceTexture};
 use std::sync::Arc;
 use std::time;
@@ -18,6 +20,7 @@ use winit::event::{
 };
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{Key, KeyCode, PhysicalKey};
+#[cfg(target_os = "macos")]
 use winit::platform::macos::EventLoopBuilderExtMacOS;
 use winit::window::{Window, WindowAttributes, WindowId};
 
@@ -240,6 +243,15 @@ impl ApplicationHandler<PuzzleEvents> for App {
                 .with_min_inner_size(size);
 
             let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+
+            #[cfg(target_os = "windows")]
+            {
+                use winit::raw_window_handle::*;
+                if let RawWindowHandle::Win32(handle) = window.window_handle().unwrap().as_raw() {
+                    unsafe { self.app_menu.menu_bar.init_for_hwnd(handle.hwnd.get()) }.unwrap();
+                }
+            }
+
             let window_size = window.inner_size();
             let surface_texture =
                 SurfaceTexture::new(window_size.width, window_size.height, window.clone());
@@ -430,10 +442,12 @@ impl ApplicationHandler<PuzzleEvents> for App {
 fn main() -> Result<(), Error> {
     env_logger::init();
 
-    let event_loop = EventLoop::<PuzzleEvents>::with_user_event()
-        .with_default_menu(false)
-        .build()
-        .unwrap();
+    let event_loop = {
+        let mut builder = EventLoop::<PuzzleEvents>::with_user_event();
+        #[cfg(target_os = "macos")]
+        let builder = builder.with_default_menu(false);
+        builder.build().unwrap()
+    };
 
     let mut app = App::new();
 
