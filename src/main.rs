@@ -41,12 +41,20 @@ struct PuzzlePreset {
     id: i32,
 }
 
+struct PuzzleGame {
+    index: usize,
+    menu_item: CheckMenuItem,
+}
+
 struct AppMenu {
     menu_bar: Menu,
     _file_menu: Submenu,
     new_game_item: MenuItem,
     restart_game_item: MenuItem,
+    type_menu: Submenu,
     preset_items: Vec<PuzzlePreset>,
+    game_items: Vec<PuzzleGame>,
+    current_game_index: usize,
 }
 
 impl AppMenu {
@@ -86,8 +94,31 @@ impl AppMenu {
             Some(Accelerator::new(Some(Modifiers::SUPER), Code::KeyR)),
         );
 
+        // Build the Switch Game submenu
+        let game_submenu = Submenu::new("Switch &Game", true);
+        let mut game_items = Vec::new();
+
+        for i in 0..puzzle_wrap::game_count() {
+            let name = puzzle_wrap::game_name(i);
+            let game_menu_item = CheckMenuItemBuilder::new()
+                .text(&name)
+                .enabled(true)
+                .checked(i == 0)
+                .build();
+            game_submenu.append(&game_menu_item).unwrap();
+            game_items.push(PuzzleGame {
+                index: i,
+                menu_item: game_menu_item,
+            });
+        }
+
         file_menu
-            .append_items(&[&new_game_item, &restart_game_item])
+            .append_items(&[
+                &new_game_item,
+                &restart_game_item,
+                &PredefinedMenuItem::separator(),
+                &game_submenu,
+            ])
             .unwrap();
 
         let edit_menu = Submenu::new("&Edit", true);
@@ -120,7 +151,10 @@ impl AppMenu {
             _file_menu: file_menu,
             new_game_item,
             restart_game_item,
+            type_menu,
             preset_items,
+            game_items,
+            current_game_index: 0,
         }
     }
 }
@@ -189,6 +223,67 @@ impl App {
         self.frontend.redraw();
         if let Some(window) = &self.window {
             window.request_redraw();
+        }
+    }
+
+    fn rebuild_type_menu(&mut self) {
+        for preset in &self.app_menu.preset_items {
+            let _ = self.app_menu.type_menu.remove(&preset.menu_item);
+        }
+        self.app_menu.preset_items.clear();
+
+        let current_preset = self.frontend.which_preset();
+        if let Some(presets) = self.frontend.get_presets() {
+            for (index, entry) in presets.entries().enumerate() {
+                let preset_menu_item = CheckMenuItemBuilder::new()
+                    .text(entry.title())
+                    .enabled(true)
+                    .checked(Some(index as i32) == current_preset)
+                    .build();
+                self.app_menu.type_menu.append(&preset_menu_item).unwrap();
+                self.app_menu.preset_items.push(PuzzlePreset {
+                    name: entry.title().to_string(),
+                    id: entry.id(),
+                    menu_item: preset_menu_item,
+                });
+            }
+        }
+    }
+
+    fn handle_game_menu_event(&mut self, event: muda::MenuEvent) {
+        let selected_index = self
+            .app_menu
+            .game_items
+            .iter()
+            .find(|g| event.id() == g.menu_item.id())
+            .map(|g| g.index);
+
+        if let Some(game_index) = selected_index {
+            self.frontend.switch_game(game_index);
+            self.frontend.new_game();
+
+            let (actual_width, actual_height) = self.frontend.set_size(WIDTH, HEIGHT);
+            self.actual_width = actual_width;
+            self.actual_height = actual_height;
+
+            let window = self.window.as_mut().unwrap();
+            let _ = window.request_inner_size(LogicalSize::new(actual_width, actual_height));
+            let window_size = window.inner_size();
+
+            if let Some(pixels) = &mut self.pixels {
+                let _ = pixels.resize_buffer(actual_width, actual_height);
+                let _ = pixels.resize_surface(window_size.width, window_size.height);
+            }
+
+            self.frontend.redraw();
+            self.window.as_ref().unwrap().request_redraw();
+
+            self.app_menu.current_game_index = game_index;
+            for game in &self.app_menu.game_items {
+                game.menu_item.set_checked(game.index == game_index);
+            }
+
+            self.rebuild_type_menu();
         }
     }
 
@@ -277,6 +372,13 @@ impl ApplicationHandler<PuzzleEvents> for App {
                     self.new_game();
                 } else if event.id() == self.app_menu.restart_game_item.id() {
                     self.restart_game();
+                } else if self
+                    .app_menu
+                    .game_items
+                    .iter()
+                    .any(|g| event.id() == g.menu_item.id())
+                {
+                    self.handle_game_menu_event(event);
                 } else {
                     self.handle_preset_menu_event(event);
                 }

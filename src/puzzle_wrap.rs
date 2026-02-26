@@ -19,7 +19,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use winit::keyboard::KeyCode;
 
 unsafe extern "C" {
-    static thegame: GameFFI;
+    static gamecount: c_int;
+    static gamelist: *const GameFFI;
 }
 
 const PIXEL_RATIO: f32 = 2.;
@@ -145,10 +146,10 @@ pub struct DrawingFFI {
     handle: *mut Drawing,
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 pub struct GameFFI {
-    _data: (),
-    _marker: core::marker::PhantomData<(*mut u8, core::marker::PhantomPinned)>,
+    name: *const c_char,
+    _opaque: [u8; 408], // 408 bytes of opaque data
 }
 
 #[repr(C)]
@@ -905,9 +906,17 @@ impl Frontend {
     }
 
     pub fn new_midend(&mut self) {
-        unsafe {
-            let midend = midend_new(self, &thegame, &self.drawing_ffi, &mut self.drawing);
+        self.switch_game(0);
+    }
 
+    pub fn switch_game(&mut self, game_index: usize) {
+        unsafe {
+            let midend = midend_new(
+                self,
+                std::ptr::addr_of!(gamelist).add(game_index).read(),
+                &self.drawing_ffi,
+                &mut self.drawing,
+            );
             self.midend = midend;
             self.sync_colors();
         }
@@ -1072,6 +1081,17 @@ impl Frontend {
             let preset = midend_which_preset(self.midend);
             if preset == -1 { None } else { Some(preset) }
         }
+    }
+}
+
+pub fn game_count() -> usize {
+    unsafe { gamecount as usize }
+}
+
+pub fn game_name(index: usize) -> String {
+    unsafe {
+        let game = std::ptr::addr_of!(gamelist).add(index).read();
+        CStr::from_ptr((*game).name).to_string_lossy().into_owned()
     }
 }
 

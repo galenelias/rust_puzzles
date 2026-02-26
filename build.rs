@@ -10,11 +10,14 @@ fn main() {
     let mut build = cc::Build::new();
 
     build
+        // Games
+        .file("puzzles/bridges.c")
+        .file("puzzles/cube.c")
+        .file("puzzles/flood.c")
+        .file("puzzles/map.c")
         .file("puzzles/mines.c")
-        // .file("puzzles/keen.c")
-        // .file("puzzles/rect.c")
-        // .file("puzzles/bridges.c")
-        // .file("puzzles/filling.c")
+        .file("puzzles/samegame.c")
+        .file("puzzles/tents.c")
         // // common_libs
         .file("puzzles/divvy.c")
         .file("puzzles/drawing.c")
@@ -30,6 +33,8 @@ fn main() {
         .file("puzzles/random.c")
         .file("puzzles/sort.c")
         .file("puzzles/tree234.c")
+        .define("COMBINED", None)
+        .file("puzzles/list.c")
         .include("puzzles_inc");
 
     if !cfg!(target_env = "msvc") {
